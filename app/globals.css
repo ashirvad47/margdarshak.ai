@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@layer base {
+  /*
+    If Mantine's styles.css (imported in layout.js) provides a good reset,
+    you might not need much here. Tailwind's preflight is likely still active
+    unless explicitly disabled in tailwind.config.js.
+  */
+  body {
+    /* Default background and text color will come from MantineProvider */
+    /* You can set a very base font-family here as a fallback,
+       but Mantine's theme font should take precedence. */
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    -webkit-font-smoothing: antialiased; /* Common for smoother fonts, Apple-like */
+    -moz-osx-font-smoothing: grayscale; /* Common for smoother fonts, Apple-like */
+  }
+
+  /* Ensure links have a sensible default color if not styled by Mantine components */
+  a {
+    @apply text-blue-600 hover:text-blue-800; /* Example, adjust to your accent color */
+  }
+}
+
+@layer utilities {
+  /* Review and adapt existing utilities if needed */
+  .gradient {
+    /* Adjust this to fit your new light theme aesthetic */
+    /* Example: A subtle gray gradient for titles on a light background */
+    @apply bg-gradient-to-b from-gray-600 via-gray-500 to-gray-600;
+  }
+  .gradient-title {
+    /* This will use the .gradient above. */
+    @apply gradient font-extrabold tracking-tight text-transparent bg-clip-text pb-1 pr-1;
+    /* You might want slightly different styling for titles in a light theme */
+  }
+}
+
+/* Hero image styles - can be kept and adjusted later if they still fit */
+.hero-image-wrapper {
+  perspective: 1000px;
+}
+
+.hero-image {
+  transform: rotateX(15deg) scale(1);
+  transition: transform 0.5s ease-out;
+  will-change: transform;
+}
+
+.hero-image.scrolled {
+  transform: rotateX(0deg) scale(1) translateY(40px);
+}
+
+/* Grid background - adjust for a lighter feel */
+.grid-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.04) 1px, /* Even lighter grid lines */
+      transparent 1px
+    ),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+  background-size: 70px 70px; /* Maybe slightly larger grid */
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.7; /* Make it more subtle */
+}
+
+.grid-background::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  /* Very subtle radial gradient, mostly transparent */
+  background: radial-gradient(circle, transparent, rgba(230, 230, 230, 0.05) 80%, rgba(250, 250, 250, 0.15));
+}
+
+/* Custom scrollbar (Apple-like) - Optional, but adds to the aesthetic */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05); /* Very light track */
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.25); /* Subtle thumb */
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.35);
+}
