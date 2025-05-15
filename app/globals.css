@@ -99,3 +99,66 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.35);
 }
+
+/* Animation for rotating words in Hero Section */
+.word-rotator-wrapper {
+  display: inline-block; /* To keep it inline with ".ai" */
+  position: relative;
+  /* Ensure this height matches or is slightly larger than the line-height of your title */
+  /* You might need to adjust this based on the final font size and line-height */
+  height: 1.2em; /* Example: if font-size is 5rem, line-height might be ~6rem */
+  overflow: hidden;
+  vertical-align: middle; /* Helps align with adjacent text */
+}
+
+.word-rotator-wrapper .animated-word {
+  display: inline-block;
+  position: absolute;
+  left: 0;
+  top: 0; /* Initial position for the first word */
+  white-space: nowrap; /* Prevent wrapping if a word is unexpectedly long */
+  color: inherit; /* Inherit color from parent */
+  font: inherit; /* Inherit font styles from parent */
+  opacity: 0;
+  transform: translateY(100%); /* Start below the viewport */
+  animation-duration: 0.8s; /* Duration of enter/exit animation */
+  animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1); /* Smooth easing */
+  animation-fill-mode: forwards;
+}
+
+.word-rotator-wrapper .animated-word.entering {
+  animation-name: slideInFromBottom;
+  opacity: 1; /* Start visible for animation */
+}
+
+.word-rotator-wrapper .animated-word.exiting {
+  animation-name: slideOutToTop;
+  /* Opacity will be handled by keyframes */
+}
+
+@keyframes slideInFromBottom {
+  0% {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0%);
+  }
+}
+
+@keyframes slideOutToTop {
+  0% {
+    opacity: 1;
+    transform: translateY(0%);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+
+/* Ensure the height of the wrapper is correctly calculated or set based on title's actual rendered line-height */
+/* Example for a large title: if title style line-height is 1.1, and font-size clamp(...) ~6rem, height could be around 6.6rem */
+/* The 1.2em above is a relative unit, if the parent span's font-size is set, em will relate to that */
+/* It's crucial that the .word-rotator-wrapper has a fixed height that fits exactly one line of text */
