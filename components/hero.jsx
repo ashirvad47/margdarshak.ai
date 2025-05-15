@@ -3,10 +3,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Button, Title, Text, Group, Stack, Center, Box } from '@mantine/core';
-import { IconPlayerPlay, IconArrowRight } from '@tabler/icons-react';
+import { Title, Text, Group, Stack, Center, Box } from '@mantine/core';
+import { IconPlayerPlay, IconBrandYoutube } from '@tabler/icons-react';
 import { Particles } from "@/components/magicui/particles";
 import { useTheme } from "next-themes";
+import { InteractiveHoverButton } from "@/components/magicui/interactive-hover-button";
 
 const languages = [
   { text: "Margdarshak", lang: "en" },
@@ -24,9 +25,17 @@ const languages = [
 const TITLE_LINE_HEIGHT_FACTOR = 1.1;
 
 const NEW_MARGDARSHAK_COLOR = "#1C2D4A";
-const NEW_AI_COLOR = "#F4C542";
+const NEW_AI_COLOR = "#F4C542"; // Golden Yellow
 const NEW_PARTICLE_COLOR_LIGHT_THEME = "#7EC6C3";
 const NEW_PARTICLE_COLOR_DARK_THEME = "#F0F0F0";
+
+// YouTube Button Colors
+const YOUTUBE_RED_FILL = "#FF0033"; 
+const YOUTUBE_INITIAL_TEXT_COLOR_CLASS = "text-neutral-800"; 
+const YOUTUBE_HOVER_TEXT_COLOR_CLASS = "text-white"; 
+// THIS IS THE ONLY MODIFIED LINE FROM YOUR ORIGINAL FILE:
+const YOUTUBE_INITIAL_BORDER_COLOR_CLASS = "border-gray-300"; // Was "border-neutral-400"
+
 
 const HeroSection = () => {
   const imageRef = useRef(null);
@@ -81,7 +90,9 @@ const HeroSection = () => {
           height: calc(1em * ${TITLE_LINE_HEIGHT_FACTOR}); 
           line-height: calc(1em * ${TITLE_LINE_HEIGHT_FACTOR}); 
           overflow: hidden;
-          width: 400px; 
+          width: max-content; 
+          grid-template-columns:
+              repeat(auto‑fit, minmax(180px, 1fr));
         }
 
         .animated-word {
@@ -104,7 +115,7 @@ const HeroSection = () => {
         }
       `}</style>
 
-      <section className="relative w-full pt-10 md:pt-12 pb-10 overflow-hidden">
+      <section className="relative w-full pt-10 md:pt-12 pb-10 overflow-hidden overflow-x-hidden">
         <Particles
           className="absolute inset-0 z-0"
           quantity={200}
@@ -134,8 +145,7 @@ const HeroSection = () => {
               <Box
                 component="span"
                 className="margdarshak-slot"
-                // CORRECTED LINE: Removed 'as React.CSSProperties'
-                style={{ '--margdarshak-color': margdarshakColor }} 
+                style={{ '--margdarshak-color': margdarshakColor }}
               >
                 <span
                   key={currentWordIndex}
@@ -184,27 +194,31 @@ const HeroSection = () => {
             </Text>
 
             <Group justify="center" gap="md" mt="lg">
-              <Button
-                component={Link}
-                href="/dashboard"
-                size="lg"
-                variant="gradient"
-                gradient={{ from: 'blue', to: 'cyan', deg: 90 }}
-                rightSection={<IconArrowRight size="1.125rem" />}
-              >
-                Get Started
-              </Button>
+              <Link href="/dashboard" passHref>
+                <InteractiveHoverButton
+                  initialTextColorClass="text-[#1C2D4A]"
+                  hoverTextColorClass="text-[#F4C542]"
+                  fillColor="#1C2D4A"
+                  borderColorClass="border-gray-300"
+                >
+                  Get Started
+                </InteractiveHoverButton>
+              </Link>
 
-              <Button
-                component={Link}
-                href="/demo"
-                size="lg"
-                variant="outline"
-                color="gray"
-                leftSection={<IconPlayerPlay size="1.125rem" />}
-              >
-                Watch Demo
-              </Button>
+              <Link href="https://www.youtube.com/" passHref> {/* Replace with actual YouTube link */}
+                <InteractiveHoverButton
+                  fillColor={YOUTUBE_RED_FILL}
+                  initialTextColorClass={YOUTUBE_INITIAL_TEXT_COLOR_CLASS}
+                  hoverTextColorClass={YOUTUBE_HOVER_TEXT_COLOR_CLASS}
+                  borderColorClass={YOUTUBE_INITIAL_BORDER_COLOR_CLASS} // Uses the corrected border class
+                  initialBgColorClass="bg-transparent"
+                  icon={(props) => <IconPlayerPlay {...props} fill="white" />} 
+                  hoverIcon={(props) => <IconBrandYoutube {...props} fill="white" />}
+                  showArrow={false}
+                >
+                  Watch Demo
+                </InteractiveHoverButton>
+              </Link>
             </Group>
 
             <div className="hero-image-wrapper mt-10 md:mt-12 w-full">
