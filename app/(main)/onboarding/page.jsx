@@ -1,31 +1,36 @@
 // app/(main)/onboarding/page.jsx
 import { redirect } from "next/navigation";
-import { industries } from "@/data/industries";
+// import { industries } from "@/data/industries"; // No longer needed here
 import OnboardingForm from "./_components/onboarding-form";
 import { getUserOnboardingStatus } from "@/actions/user";
-import { checkUser } from "@/lib/checkUser"; // Import checkUser
+import { checkUser } from "@/lib/checkUser";
 
 export default async function OnboardingPage() {
-  // Ensure user exists in DB before checking onboarding status
   const dbUser = await checkUser();
   if (!dbUser) {
-    // This could happen if checkUser fails or if the user is not authenticated.
-    // Redirecting to sign-in is a safe fallback.
-    redirect("/sign-in");
-    return null; // Stop further execution to prevent errors
+    redirect("/sign-in"); // Or appropriate error handling
+    return null;
   }
 
-  // Now that dbUser exists (or was created), proceed to check their onboarding status.
-  const { isOnboarded } = await getUserOnboardingStatus();
+  const { isMlProfileCompleted, isFullyOnboarded } = await getUserOnboardingStatus();
 
-  if (isOnboarded) {
+  if (isFullyOnboarded) {
+    // If they have completed ML profile AND selected an industry (final step)
     redirect("/dashboard");
-    return null; // Stop further execution
+    return null;
   }
 
+  if (isMlProfileCompleted && !isFullyOnboarded) {
+    // If they have completed ML profile but NOT selected an industry yet
+    redirect("/career-suggestions"); // Redirect to the next step (ML suggestions page)
+    return null;
+  }
+
+  // If !isMlProfileCompleted, they land here to fill the ML onboarding form
   return (
     <main>
-      <OnboardingForm industries={industries} />
+      {/* industries prop is no longer passed to OnboardingForm */}
+      <OnboardingForm />
     </main>
   );
 }

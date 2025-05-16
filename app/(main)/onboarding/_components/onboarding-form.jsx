@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,17 +16,20 @@ import {
   Text,
   Stack,
   LoadingOverlay,
-  Group, // Keep if used elsewhere, not strictly needed for the fix itself
   Center,
+  Radio,
+  SegmentedControl,
+  Grid,
+  Group,
 } from "@mantine/core";
 import { IconLoader } from '@tabler/icons-react';
 import useFetch from "@/hooks/use-fetch";
-import { onboardingSchema } from "@/app/lib/schema"; // Assuming this schema expects experience as string
+import { mlOnboardingSchema } from "@/app/lib/schema"; // Use the new schema
 import { updateUser } from "@/actions/user";
+import { degreeFieldOptions } from "@/data/degreeFields"; // Import degree options
 
-const OnboardingForm = ({ industries }) => {
+const OnboardingForm = () => { // Removed 'industries' prop as it's not used here anymore
   const router = useRouter();
-  const [selectedMantineIndustry, setSelectedMantineIndustry] = useState(null);
 
   const {
     loading: updateLoading,
@@ -38,38 +41,38 @@ const OnboardingForm = ({ industries }) => {
     register,
     handleSubmit: handleFormSubmit,
     formState: { errors },
-    setValue,
-    watch,
     control,
+    setValue, // Keep setValue if needed for dynamic updates
   } = useForm({
-    resolver: zodResolver(onboardingSchema),
+    resolver: zodResolver(mlOnboardingSchema),
     defaultValues: {
-      industry: "",
-      subIndustry: "",
-      experience: "", // MODIFIED: Default to empty string
-      skills: "",
-      bio: ""
-    }
+      experience: "", // Default to empty string
+      bio: "",
+      fieldOfStudy: "",
+      gpa: "",
+      extracurricularActivities: "",
+      internships: "",
+      projects: "",
+      leadershipPositions: "", // Default to empty string for NumberInput expecting string
+      fieldSpecificCourses: "",
+      researchExperience: "", // Default to empty string
+      codingSkills: "", // Default to empty string
+      communicationSkills: "",
+      problemSolvingSkills: "",
+      teamworkSkills: "",
+      analyticalSkills: "",
+      presentationSkills: "",
+      networkingSkills: "",
+      industryCertifications: "", // Default to empty string
+    },
   });
 
   const onSubmitHandler = async (values) => {
     try {
-      const formattedIndustry = `${values.industry}-${values.subIndustry
-        .toLowerCase()
-        .replace(/ /g, "-")}`;
-
-      // If your backend expects 'experience' as a number, you might need to parse it here:
-      // const payload = {
-      //   ...values,
-      //   industry: formattedIndustry,
-      //   experience: values.experience === "" ? null : Number(values.experience), // Or handle as per backend needs
-      // };
-      // await updateUserFn(payload);
-
-      await updateUserFn({ // As is, 'experience' will be a string (e.g., "5", "")
-        ...values,
-        industry: formattedIndustry,
-      });
+      // Transform string values from NumberInput to actual numbers or null for the backend if necessary
+      // The Zod schema already transforms empty strings to undefined, and numbers to numbers.
+      // So, the 'values' object here should be correctly typed for the updateUserFn.
+      await updateUserFn(values);
     } catch (error) {
       console.error("Onboarding error:", error);
       toast.error("Failed to complete profile. " + (error.message || "Please try again."));
@@ -78,135 +81,286 @@ const OnboardingForm = ({ industries }) => {
 
   useEffect(() => {
     if (updateResult && !updateLoading) {
-      toast.success("Profile completed successfully!");
-      router.push("/dashboard");
+      toast.success("Profile details saved successfully!");
+      // Redirect to the new career suggestion page (we'll create this in Step 2)
+      // For now, let's assume it's '/career-suggestions'
+      router.push("/career-suggestions"); // TODO: Update this route later
       router.refresh();
     }
   }, [updateResult, updateLoading, router]);
 
-  const watchedIndustryId = watch("industry");
+  const skillRatingOptions = [
+    { label: "0 (None)", value: "0" },
+    { label: "1 (Beginner)", value: "1" },
+    { label: "2 (Intermediate)", value: "2" },
+    { label: "3 (Advanced)", value: "3" },
+    { label: "4 (Expert)", value: "4" },
+  ];
 
-  useEffect(() => {
-    if (watchedIndustryId) {
-      setSelectedMantineIndustry(
-        industries.find((ind) => ind.id === watchedIndustryId)
-      );
-      // setValue("subIndustry", ""); // Reset subIndustry when industry changes
-    } else {
-      setSelectedMantineIndustry(null);
-    }
-  }, [watchedIndustryId, industries, setValue]);
-
-  const industryOptions = industries.map(ind => ({ value: ind.id, label: ind.name }));
-  const subIndustryOptions = selectedMantineIndustry?.subIndustries.map(sub => ({ value: sub, label: sub })) || [];
+  const binaryOptions = [
+    { label: "No", value: "0" },
+    { label: "Yes", value: "1" },
+  ];
 
   return (
-    <Center style={{ minHeight: 'calc(100vh - 60px)', paddingTop: 'var(--mantine-spacing-xl)', paddingBottom: 'var(--mantine-spacing-xl)' }}>
-      <Paper shadow="md" p="xl" radius="md" withBorder style={{ maxWidth: '600px', width: '100%' }}>
-        <LoadingOverlay visible={updateLoading} zIndex={1000} overlayProps={{ radius: "sm", blur: 2 }}/>
+    <Center style={{ minHeight: 'calc(100vh - 120px)', paddingTop: 'var(--mantine-spacing-xl)', paddingBottom: 'var(--mantine-spacing-xl)' }}>
+      <Paper shadow="md" p="xl" radius="md" withBorder style={{ maxWidth: '800px', width: '100%' }}>
+        <LoadingOverlay visible={updateLoading} zIndex={1000} overlayProps={{ radius: "sm", blur: 2 }} />
         <Stack gap="lg">
-          <Stack gap="xs" ta="center">
-            <Title order={2} className="gradient-title">Complete Your Profile</Title>
+          <Stack gap="xs" ta="center" mb="lg">
+            <Title order={2} className="gradient-title">Tell Us About Yourself</Title>
             <Text c="dimmed" size="sm">
-              Select your industry to get personalized career insights and recommendations.
+              This information will help us predict the best career paths for you.
             </Text>
           </Stack>
 
-          <form onSubmit={handleFormSubmit(onSubmitHandler)} className="space-y-6">
-            <Stack gap="md">
-              <Controller
-                name="industry"
-                control={control}
-                render={({ field, fieldState: { error } }) => (
-                  <MantineSelect
-                    label="Industry"
-                    placeholder="Select an industry"
-                    data={industryOptions}
-                    value={field.value || ""}
-                    onChange={(value) => {
-                        field.onChange(value);
-                        setValue("subIndustry", ""); // Reset subIndustry when industry changes
-                    }}
-                    searchable
-                    nothingFoundMessage="Nothing found..."
-                    error={error?.message}
-                    required
-                    clearable
-                  />
-                )}
-              />
+          <form onSubmit={handleFormSubmit(onSubmitHandler)}>
+            <Stack gap="xl">
 
-              {watchedIndustryId && (
-                <Controller
-                  name="subIndustry"
-                  control={control}
-                  render={({ field, fieldState: { error } }) => (
-                    <MantineSelect
-                      label="Specialization"
-                      placeholder="Select your specialization"
-                      data={subIndustryOptions}
-                      value={field.value || ""}
-                      onChange={field.onChange}
-                      searchable
-                      nothingFoundMessage="Nothing found..."
-                      disabled={!watchedIndustryId || subIndustryOptions.length === 0}
-                      error={error?.message}
-                      required
-                      clearable
+              {/* Academic and General Experience Section */}
+              <Title order={4} c="dimmed">Academic & General Profile</Title>
+              <Grid gutter="md">
+                <Grid.Col span={{ base: 12, md: 6 }}>
+                  <Controller
+                    name="fieldOfStudy"
+                    control={control}
+                    render={({ field, fieldState: { error } }) => (
+                      <MantineSelect
+                        label="Field of Study (Degree)"
+                        placeholder="Select your degree"
+                        data={degreeFieldOptions}
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        searchable
+                        nothingFoundMessage="Nothing found..."
+                        error={error?.message}
+                        required
+                        clearable
+                      />
+                    )}
+                  />
+                </Grid.Col>
+                <Grid.Col span={{ base: 12, md: 6 }}>
+                  <Controller
+                    name="gpa"
+                    control={control}
+                    render={({ field, fieldState: { error } }) => (
+                      <NumberInput
+                        {...field}
+                        label="GPA"
+                        placeholder="Enter your GPA (e.g., 8.5 or 3.5)"
+                        min={0}
+                        max={10} // Assuming a scale of 10. Adjust if it's 4.
+                        decimalScale={2}
+                        error={error?.message}
+                        value={field.value === "" ? "" : Number(field.value)}
+                        onChange={(val) => field.onChange(val === "" ? "" : String(val))}
+                      />
+                    )}
+                  />
+                </Grid.Col>
+                 <Grid.Col span={{ base: 12, md: 6 }}>
+                    <Controller
+                        name="experience"
+                        control={control}
+                        render={({ field, fieldState: { error } }) => (
+                        <NumberInput
+                            {...field}
+                            label="Years of Professional Experience"
+                            placeholder="Enter total years"
+                            min={0}
+                            max={60}
+                            error={error?.message}
+                            value={field.value === "" ? "" : Number(field.value)}
+                            onChange={(val) => field.onChange(val === "" ? "" : String(val))}
+                        />
+                        )}
                     />
-                  )}
-                />
-              )}
-
-              <Controller
-                name="experience"
-                control={control}
-                render={({ field, fieldState: { error } }) => (
-                  <NumberInput
-                    {...field} // Spread field first
-                    label="Years of Experience"
-                    placeholder="Enter years of experience"
-                    min={0}
-                    max={50}
-                    error={error?.message}
-                    required
-                    // MODIFIED: field.value is a string from react-hook-form (e.g., "", "5")
-                    // NumberInput's value prop expects `number | ''`
-                    value={field.value === "" ? "" : Number(field.value)}
-                    // MODIFIED: NumberInput's onChange provides `number | ''` (e.g., 5, '')
-                    // react-hook-form's field.onChange should receive a string for Zod
-                    onChange={(valueFromNumberInput) => { // valueFromNumberInput is number | ''
-                      field.onChange(String(valueFromNumberInput)); // Converts 5 to "5", or '' to ""
-                    }}
+                </Grid.Col>
+                 <Grid.Col span={{ base: 12, md: 6 }}>
+                  <Controller
+                    name="extracurricularActivities"
+                    control={control}
+                    render={({ field, fieldState: { error } }) => (
+                      <NumberInput
+                        {...field}
+                        label="Extracurricular Activities (Count)"
+                        placeholder="Number of significant activities"
+                        min={0}
+                        max={100}
+                        error={error?.message}
+                        value={field.value === "" ? "" : Number(field.value)}
+                        onChange={(val) => field.onChange(val === "" ? "" : String(val))}
+                      />
+                    )}
                   />
-                )}
-              />
+                </Grid.Col>
+                <Grid.Col span={{ base: 12, md: 6 }}>
+                  <Controller
+                    name="internships"
+                    control={control}
+                    render={({ field, fieldState: { error } }) => (
+                      <NumberInput
+                        {...field}
+                        label="Internships (Count)"
+                        placeholder="Number of internships completed"
+                        min={0}
+                        max={50}
+                        error={error?.message}
+                        value={field.value === "" ? "" : Number(field.value)}
+                        onChange={(val) => field.onChange(val === "" ? "" : String(val))}
+                      />
+                    )}
+                  />
+                </Grid.Col>
+                <Grid.Col span={{ base: 12, md: 6 }}>
+                  <Controller
+                    name="projects"
+                    control={control}
+                    render={({ field, fieldState: { error } }) => (
+                      <NumberInput
+                        {...field}
+                        label="Projects (Count)"
+                        placeholder="Number of significant projects"
+                        min={0}
+                        max={100}
+                        error={error?.message}
+                        value={field.value === "" ? "" : Number(field.value)}
+                        onChange={(val) => field.onChange(val === "" ? "" : String(val))}
+                      />
+                    )}
+                  />
+                </Grid.Col>
+                 <Grid.Col span={{ base: 12, md: 6 }}>
+                  <Controller
+                    name="fieldSpecificCourses"
+                    control={control}
+                    render={({ field, fieldState: { error } }) => (
+                      <NumberInput
+                        {...field}
+                        label="Field Specific Courses (Count)"
+                        placeholder="Number of relevant courses taken"
+                        min={0}
+                        max={100}
+                        error={error?.message}
+                        value={field.value === "" ? "" : Number(field.value)}
+                        onChange={(val) => field.onChange(val === "" ? "" : String(val))}
+                      />
+                    )}
+                  />
+                </Grid.Col>
+              </Grid>
 
-              <TextInput
-                label="Skills"
-                placeholder="E.g., Python, JavaScript, Project Management"
-                description="Separate multiple skills with commas"
-                {...register("skills")}
-                error={errors.skills?.message}
-              />
+              {/* Binary Yes/No Section */}
+              <Title order={4} c="dimmed" mt="md">Achievements & Certifications</Title>
+              <Grid gutter="md">
+                <Grid.Col span={{ base: 12, md: 4 }}>
+                  <Controller
+                    name="leadershipPositions"
+                    control={control}
+                    render={({ field, fieldState: { error } }) => (
+                      <Radio.Group
+                        {...field}
+                        label="Leadership Positions Held?"
+                        error={error?.message}
+                        // required by schema if not optional
+                      >
+                        <Group mt="xs">
+                          <Radio value="1" label="Yes" />
+                          <Radio value="0" label="No" />
+                        </Group>
+                      </Radio.Group>
+                    )}
+                  />
+                </Grid.Col>
+                 <Grid.Col span={{ base: 12, md: 4 }}>
+                  <Controller
+                    name="researchExperience"
+                    control={control}
+                    render={({ field, fieldState: { error } }) => (
+                       <Radio.Group
+                        {...field}
+                        label="Research Experience?"
+                        error={error?.message}
+                      >
+                        <Group mt="xs">
+                          <Radio value="1" label="Yes" />
+                          <Radio value="0" label="No" />
+                        </Group>
+                      </Radio.Group>
+                    )}
+                  />
+                </Grid.Col>
+                <Grid.Col span={{ base: 12, md: 4 }}>
+                   <Controller
+                    name="industryCertifications"
+                    control={control}
+                    render={({ field, fieldState: { error } }) => (
+                      <Radio.Group
+                        {...field}
+                        label="Industry Certifications?"
+                        error={error?.message}
+                      >
+                        <Group mt="xs">
+                          <Radio value="1" label="Yes" />
+                          <Radio value="0" label="No" />
+                        </Group>
+                      </Radio.Group>
+                    )}
+                  />
+                </Grid.Col>
+              </Grid>
+
+              {/* Skills Rating Section */}
+              <Title order={4} c="dimmed" mt="md">Skills Assessment (Rate 0-4)</Title>
+              <Grid gutter="md">
+                {[
+                  {name: "codingSkills", label: "Coding Skills"},
+                  {name: "communicationSkills", label: "Communication Skills"},
+                  {name: "problemSolvingSkills", label: "Problem Solving Skills"},
+                  {name: "teamworkSkills", label: "Teamwork Skills"},
+                  {name: "analyticalSkills", label: "Analytical Skills"},
+                  {name: "presentationSkills", label: "Presentation Skills"},
+                  {name: "networkingSkills", label: "Networking Skills"},
+                ].map(skill => (
+                    <Grid.Col span={{ base: 12, sm: 6, md: 4 }} key={skill.name}>
+                        <Controller
+                        name={skill.name}
+                        control={control}
+                        render={({ field, fieldState: { error } }) => (
+                            <MantineSelect
+                            {...field}
+                            label={skill.label}
+                            placeholder={`Rate ${skill.label.toLowerCase()}`}
+                            data={skillRatingOptions}
+                            error={error?.message}
+                            // required by schema if not optional
+                            />
+                        )}
+                        />
+                    </Grid.Col>
+                ))}
+              </Grid>
 
               <MantineTextarea
                 label="Professional Bio (Optional)"
-                placeholder="Tell us about your professional background, achievements, and career goals..."
-                minRows={4}
+                placeholder="Briefly describe your career aspirations, key strengths, or any other relevant information (max 1000 characters)."
+                minRows={3}
                 autosize
                 {...register("bio")}
                 error={errors.bio?.message}
+                maxLength={1000}
               />
 
               <Button
                 type="submit"
                 fullWidth
-                mt="md"
+                mt="xl"
+                size="md"
                 loading={updateLoading}
                 loaderProps={{ children: <IconLoader size="1rem" className="animate-spin"/> }}
               >
-                {updateLoading ? "Saving..." : "Complete Profile"}
+                {updateLoading ? "Saving Profile..." : "Save and Proceed"}
               </Button>
             </Stack>
           </form>

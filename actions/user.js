@@ -1,97 +1,96 @@
+// File: actions/user.js
 "use server";
 
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
-import { generateAIInsights } from "./dashboard";
+// generateAIInsights from actions/dashboard.js is NOT needed for updateUser here anymore
 
-export async function updateUser(data) {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+export async function updateUser(data) { // This is the ML profile update
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) throw new Error("Unauthorized");
 
   const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
+    where: { clerkUserId },
   });
-
   if (!user) throw new Error("User not found");
 
+  const dataToUpdate = {
+    experience: data.experience !== undefined ? Number(data.experience) : null,
+    bio: data.bio || null,
+    fieldOfStudy: data.fieldOfStudy || null,
+    gpa: data.gpa !== undefined ? Number(data.gpa) : null,
+    extracurricularActivities: data.extracurricularActivities !== undefined ? Number(data.extracurricularActivities) : null,
+    internships: data.internships !== undefined ? Number(data.internships) : null,
+    projects: data.projects !== undefined ? Number(data.projects) : null,
+    leadershipPositions: data.leadershipPositions !== undefined ? Number(data.leadershipPositions) : null,
+    fieldSpecificCourses: data.fieldSpecificCourses !== undefined ? Number(data.fieldSpecificCourses) : null,
+    researchExperience: data.researchExperience !== undefined ? Number(data.researchExperience) : null,
+    codingSkills: data.codingSkills !== undefined ? Number(data.codingSkills) : null,
+    communicationSkills: data.communicationSkills !== undefined ? Number(data.communicationSkills) : null,
+    problemSolvingSkills: data.problemSolvingSkills !== undefined ? Number(data.problemSolvingSkills) : null,
+    teamworkSkills: data.teamworkSkills !== undefined ? Number(data.teamworkSkills) : null,
+    analyticalSkills: data.analyticalSkills !== undefined ? Number(data.analyticalSkills) : null,
+    presentationSkills: data.presentationSkills !== undefined ? Number(data.presentationSkills) : null,
+    networkingSkills: data.networkingSkills !== undefined ? Number(data.networkingSkills) : null,
+    industryCertifications: data.industryCertifications !== undefined ? Number(data.industryCertifications) : null,
+  };
+
   try {
-    // Start a transaction to handle both operations
-    const result = await db.$transaction(
-      async (tx) => {
-        // First check if industry exists
-        let industryInsight = await tx.industryInsight.findUnique({
-          where: {
-            industry: data.industry,
-          },
-        });
-
-        // If industry doesn't exist, create it with default values
-        if (!industryInsight) {
-          const insights = await generateAIInsights(data.industry);
-
-          industryInsight = await db.industryInsight.create({
-            data: {
-              industry: data.industry,
-              ...insights,
-              nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            },
-          });
-        }
-
-        // Now update the user
-        const updatedUser = await tx.user.update({
-          where: {
-            id: user.id,
-          },
-          data: {
-            industry: data.industry,
-            experience: data.experience,
-            bio: data.bio,
-            skills: data.skills,
-          },
-        });
-
-        return { updatedUser, industryInsight };
-      },
-      {
-        timeout: 10000, // default: 5000
-      }
-    );
-
-    revalidatePath("/");
-    return result.user;
+    const updatedUser = await db.user.update({
+      where: { id: user.id },
+      data: dataToUpdate,
+    });
+    console.log("User ML profile updated in DB:", updatedUser.id);
+    revalidatePath("/onboarding"); // For the checks on this page
+    revalidatePath("/career-suggestions"); // If this page shows profile data
+    return updatedUser;
   } catch (error) {
-    console.error("Error updating user and industry:", error.message);
-    throw new Error("Failed to update profile");
+    console.error("Error updating user with ML profile:", error.message, error.stack);
+    if (error.code) {
+        throw new Error(`Database error during ML profile update: ${error.message} (Code: ${error.code})`);
+    }
+    throw new Error(`Failed to update ML profile: ${error.message}`);
   }
 }
 
 export async function getUserOnboardingStatus() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) {
+    // Not authenticated, so not onboarded in any sense relevant to the app flow.
+    return {
+        isMlProfileCompleted: false,
+        isFullyOnboarded: false,
+        userExists: false, // Clerk middleware should handle unauth users, but good to be clear
+    };
+  }
 
   const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
+    where: { clerkUserId },
+    select: {
+      id: true, // To confirm user record exists in our DB
+      fieldOfStudy: true, // Marker for ML profile completion
+      industry: true,     // Marker for final industry/career choice (full onboarding)
+    },
   });
 
-  if (!user) throw new Error("User not found");
-
-  try {
-    const user = await db.user.findUnique({
-      where: {
-        clerkUserId: userId,
-      },
-      select: {
-        industry: true,
-      },
-    });
-
+  if (!user) {
+    // User exists in Clerk but not in our DB yet.
+    // checkUser() should handle creating them. If called after checkUser and still null, it's an issue.
+    // For the purpose of status, if no DB record, they haven't started.
+    console.warn(`getUserOnboardingStatus: User with clerkUserId ${clerkUserId} not found in DB. checkUser should have run.`);
     return {
-      isOnboarded: !!user?.industry,
+      isMlProfileCompleted: false,
+      isFullyOnboarded: false,
+      userExists: false,
     };
-  } catch (error) {
-    console.error("Error checking onboarding status:", error);
-    throw new Error("Failed to check onboarding status");
   }
+
+  // isMlProfileCompleted: True if 'fieldOfStudy' (a required field from the ML form) is present.
+  // isFullyOnboarded: True if 'industry' (set after career choice) is present.
+  return {
+    isMlProfileCompleted: !!user.fieldOfStudy,
+    isFullyOnboarded: !!user.industry,
+    userExists: true,
+  };
 }
