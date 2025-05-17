@@ -32,8 +32,12 @@ export const generateAIInsights = async (industry) => {
   const response = result.response;
   const text = response.text();
   const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
-
-  return JSON.parse(cleanedText);
+  try {
+    return JSON.parse(cleanedText);
+  } catch (parseError) {
+    console.error("Failed to parse AI insights JSON:", cleanedText, parseError);
+    throw new Error(`AI returned malformed JSON for industry insights. Raw text: ${cleanedText.substring(0, 100)}...`);
+  }
 };
 
 export async function getIndustryInsights() {

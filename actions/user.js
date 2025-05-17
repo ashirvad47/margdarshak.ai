@@ -4,7 +4,6 @@
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
-// generateAIInsights from actions/dashboard.js is NOT needed for updateUser here anymore
 
 export async function updateUser(data) { // This is the ML profile update
   const { userId: clerkUserId } = await auth();
@@ -51,6 +50,34 @@ export async function updateUser(data) { // This is the ML profile update
         throw new Error(`Database error during ML profile update: ${error.message} (Code: ${error.code})`);
     }
     throw new Error(`Failed to update ML profile: ${error.message}`);
+  }
+}
+export async function updateUserSkills(newSkills) {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) throw new Error("Unauthorized");
+
+  if (!Array.isArray(newSkills) || !newSkills.every(skill => typeof skill === 'string')) {
+    throw new Error("Invalid skills format. Expected an array of strings.");
+  }
+
+  // Optional: Add validation for skill length, count, etc. if needed
+  const validatedSkills = newSkills.map(skill => skill.trim()).filter(Boolean);
+
+  try {
+    const updatedUser = await db.user.update({
+      where: { clerkUserId },
+      data: {
+        skills: validatedSkills,
+      },
+    });
+    console.log("User skills updated in DB:", updatedUser.id, validatedSkills);
+    revalidatePath("/dashboard"); // Revalidate dashboard to show updated skills
+    revalidatePath("/career-suggestions"); // If skills are shown there
+    revalidatePath("/resume"); // If resume builder uses these skills
+    return updatedUser; // Return the updated user object with new skills
+  } catch (error) {
+    console.error("Error updating user skills:", error.message);
+    throw new Error(`Failed to update skills: ${error.message}`);
   }
 }
 
