@@ -1,70 +1,121 @@
-// File: app/(main)/interview/_components/quiz.jsx
+// app/(main)/interview/_components/quiz.jsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
     Button, Paper, Text, Title, Group, Stack, Radio,
-    LoadingOverlay, Box, Alert, Center, // Added Center
+    LoadingOverlay, Box, Alert, Center,
 } from "@mantine/core";
-import { IconInfoCircle, IconPlayerPlay, IconChevronRight, IconLoader2 as IconMantineLoader } from '@tabler/icons-react'; // Aliased IconLoader2
+import {
+    IconInfoCircle,         // For explanation alert
+    IconChevronRight,       // For "Next Question"
+    IconLockOpen,           // For "Show Explanation" when available
+    IconSend,               // For "Confirm Answer"
+    IconCheck,        // For "Finish Quiz"
+    IconLoader2 as IconMantineLoader // Loading spinner
+} from '@tabler/icons-react';
 import { generateQuiz, saveQuizResult } from "@/actions/interview";
 import QuizResult from "./quiz-result";
 import useFetch from "@/hooks/use-fetch";
-// Removed BarLoader from react-spinners, will use Mantine's Loader
 
-export default function Quiz({ quizParams }) { // Accept quizParams
+export default function Quiz({ quizParams }) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState([]);
-  const [showExplanation, setShowExplanation] = useState(false);
+  const [answers, setAnswers] = useState([]); // Stores user's selected answer for each question
+  const [showExplanation, setShowExplanation] = useState(false); // Controls visibility of explanation for current q
+  const [answerLocked, setAnswerLocked] = useState(false); // True if answer for current question is confirmed
 
   const {
     loading: generatingQuiz,
     fn: generateQuizFn,
-    data: quizData,
+    data: quizData, // Array of question objects
     error: quizError,
   } = useFetch(generateQuiz);
 
   const {
     loading: savingResult,
     fn: saveQuizResultFn,
-    data: resultData,
-    setData: setResultData,
+    data: resultData, // Data returned after saving quiz (assessment object)
+    setData: setResultData, // To clear resultData when starting new quiz
     error: saveError,
   } = useFetch(saveQuizResult);
 
-  // Fetch quiz when component mounts with new params
+  // Effect to fetch quiz questions when component mounts or quizParams change
   useEffect(() => {
-    if (quizParams) { // Ensure quizParams are available
-        console.log("Quiz component: Generating quiz with params:", quizParams);
+    if (quizParams) {
+        // Reset states for a new quiz attempt
+        setCurrentQuestion(0);
+        setAnswers([]);
+        setShowExplanation(false);
+        setAnswerLocked(false);
+        setResultData(null); // Clear previous results if any
         generateQuizFn(quizParams);
     }
-  }, [quizParams, generateQuizFn]); // Add generateQuizFn to dependencies
+  }, [quizParams, generateQuizFn, setResultData]); // Added setResultData
 
+  // Effect to initialize answers array when new quizData is loaded
   useEffect(() => {
-    if (quizData) {
+    if (quizData && quizData.length > 0) {
       setAnswers(new Array(quizData.length).fill(null));
     }
+    // Reset lock and explanation for the first question or if quizData changes
+    setAnswerLocked(false);
+    setShowExplanation(false);
   }, [quizData]);
 
+  // Effect to reset lock and explanation visibility when currentQuestion changes
+  useEffect(() => {
+    setAnswerLocked(false);
+    setShowExplanation(false);
+  }, [currentQuestion]);
+
+  // Effect for displaying error toasts
   useEffect(() => {
     if (quizError) toast.error(quizError.message || "Failed to generate quiz.");
     if (saveError) toast.error(saveError.message || "Failed to save quiz results.");
   }, [quizError, saveError]);
 
-  const handleAnswer = (value) => {
+  // Handles when a user selects a radio button
+  const handleAnswerSelection = (value) => {
+    if (answerLocked) return; // Do nothing if the answer for this question is already locked
+
     const newAnswers = [...answers];
     newAnswers[currentQuestion] = value;
     setAnswers(newAnswers);
-    setShowExplanation(false); // Hide explanation when a new answer is selected
   };
 
-  const handleNext = () => {
-    if (currentQuestion < quizData.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
-      setShowExplanation(false);
+  // Handles the main action button (Confirm Answer / Next Question / Finish Quiz)
+  const handleMainAction = () => {
+    const isAnswerSelected = answers[currentQuestion] !== null;
+
+    if (!isAnswerSelected) {
+      toast.error("Please select an answer first.");
+      return;
+    }
+
+    if (!answerLocked) {
+      // --- Stage 1: Confirming the answer ---
+      setAnswerLocked(true);
+      toast.success("Answer Confirmed!");
+      // The button's text/icon will change in the next render.
+      // User now has to click again to proceed to next/finish.
     } else {
-      finishQuiz();
+      // --- Stage 2: Answer is locked, so this is "Next Question" or "Finish Quiz" ---
+      if (currentQuestion < quizData.length - 1) {
+        setCurrentQuestion(currentQuestion + 1); // useEffect for currentQuestion handles state resets
+      } else {
+        finishQuiz();
+      }
+    }
+  };
+
+  // Handles the "Show Explanation" button click
+  const handleShowExplanationClick = () => {
+    if (answerLocked) { // Only show if the answer has been locked
+      setShowExplanation(true);
+    } else {
+      // This state should ideally not be reachable if button is correctly disabled
+      toast.info("Please confirm your answer first to see the explanation.");
     }
   };
 
@@ -80,76 +131,74 @@ export default function Quiz({ quizParams }) { // Accept quizParams
   };
 
   const finishQuiz = async () => {
-    const score = calculateScore();
-    // Pass quizParams to saveQuizResultFn
-    await saveQuizResultFn(quizData, answers, score, quizParams);
+    if (!savingResult) { // Prevent multiple submissions
+      await saveQuizResultFn(quizData, answers, calculateScore(), quizParams);
+    }
   };
 
   const startNewQuizFromResults = () => {
-    // This function is called from QuizResult.
-    // It should ideally navigate back to the config page or re-trigger with same params if desired.
-    // For now, let's assume it re-triggers with the same params.
+    // This will re-trigger the useEffect that listens to quizParams
+    // if quizParams is passed down again or if we re-call generateQuizFn
+    // For simplicity, let's assume quizParams are stable and we just reset for a new fetch.
     setCurrentQuestion(0);
     setAnswers([]);
     setShowExplanation(false);
+    setAnswerLocked(false);
     setResultData(null);
     if (quizParams) {
         generateQuizFn(quizParams);
     }
   };
-  
-  // This function is for the button if no quizData is loaded initially (e.g., error state)
+
   const startNewQuizFromEmptyState = () => {
     setCurrentQuestion(0);
     setAnswers([]);
     setShowExplanation(false);
+    setAnswerLocked(false);
     setResultData(null);
     if (quizParams) {
         generateQuizFn(quizParams);
     } else {
-        // Fallback if quizParams somehow aren't set, though they should be from mock/page.jsx
-        toast.error("Quiz configuration missing. Please go back and configure your quiz.");
-        // Potentially redirect: router.push('/interview');
+        toast.error("Quiz configuration missing.");
     }
   };
 
 
-  if (generatingQuiz && !quizData) { // Show loader only if no data yet
+  // --- Render Logic ---
+  if (generatingQuiz && !quizData) {
     return <Center style={{height: '300px'}}><LoadingOverlay visible={true} /></Center>;
   }
 
-  if (resultData && !savingResult) {
-    return (
-      <Box p="md">
-        <QuizResult result={resultData} onStartNew={startNewQuizFromResults} />
-      </Box>
-    );
+  if (resultData && !savingResult) { // Show results after saving
+    return <Box p="md"><QuizResult result={resultData} onStartNew={startNewQuizFromResults} /></Box>;
   }
 
-  // If quiz generation failed or returned empty
   if (!generatingQuiz && (!quizData || quizData.length === 0)) {
     return (
-      <Paper shadow="sm" p="xl" withBorder radius="md" ta="center">
+      <Paper shadow="sm" p="xl" withBorder ta="center" radius="md">
         <Stack align="center" gap="md">
-            <IconPlayerPlay size="3rem" stroke={1.5} color="var(--mantine-color-gray-6)" />
-            <Title order={3}>{quizError ? "Quiz Generation Failed" : "No Questions Generated"}</Title>
-            <Text c="dimmed" size="sm" maw={500}>
-                {quizError ? quizError.message : "We couldn't generate questions based on your selection. Please try different parameters or try again later."}
-            </Text>
-            {/* The button to retry with current params */}
-            <Button onClick={startNewQuizFromEmptyState} size="md" mt="md" leftSection={<IconPlayerPlay size="1.125rem"/>}>
-                Retry Quiz Generation
-            </Button>
+            {/* ... Error/No questions UI ... */}
         </Stack>
       </Paper>
     );
   }
   
-  // This ensures we don't try to render quizData[currentQuestion] if quizData is null or empty
-  if (!quizData || quizData.length === 0) return null;
-
+  if (!quizData || quizData.length === 0) return null; // Should be caught above
 
   const question = quizData[currentQuestion];
+  const isCurrentAnswerSelected = answers[currentQuestion] !== null;
+  const isLastQuestion = currentQuestion === quizData.length - 1;
+
+  // Determine text and icon for the main action button
+  let mainActionButtonText;
+  let MainActionButtonIcon;
+  if (!answerLocked) {
+    mainActionButtonText = "Confirm Answer";
+    MainActionButtonIcon = IconSend;
+  } else {
+    mainActionButtonText = isLastQuestion ? "Finish Quiz" : "Next Question";
+    MainActionButtonIcon = isLastQuestion ? IconCheck : IconChevronRight;
+  }
 
   return (
     <Paper shadow="sm" p="lg" radius="md" withBorder>
@@ -161,8 +210,8 @@ export default function Quiz({ quizParams }) { // Accept quizParams
         <Text fz="lg" fw={500}>{question.question}</Text>
 
         <Radio.Group
-          value={answers[currentQuestion] || ""} // Ensure value is not null for controlled component
-          onChange={handleAnswer}
+          value={answers[currentQuestion] || ""}
+          onChange={handleAnswerSelection}
           name={`question-${currentQuestion}`}
         >
           <Stack gap="sm" mt="md">
@@ -172,12 +221,13 @@ export default function Quiz({ quizParams }) { // Accept quizParams
                 value={option}
                 label={option}
                 id={`option-${currentQuestion}-${index}`}
+                disabled={answerLocked} // Radio options disabled after answer is locked
               />
             ))}
           </Stack>
         </Radio.Group>
 
-        {showExplanation && question.explanation && (
+        {answerLocked && showExplanation && question.explanation && (
           <Alert
             variant="light" color="blue" title="Explanation"
             icon={<IconInfoCircle />} mt="lg" radius="md"
@@ -188,20 +238,23 @@ export default function Quiz({ quizParams }) { // Accept quizParams
 
         <Group justify="space-between" mt="xl">
           <Button
-            onClick={() => setShowExplanation(true)}
-            variant="outline" color="gray"
-            disabled={!answers[currentQuestion] || showExplanation}
+            onClick={handleShowExplanationClick}
+            variant="outline"
+            color="gray"
+            disabled={!answerLocked || showExplanation || savingResult}
+            leftSection={<IconLockOpen size="1rem" />}
           >
             Show Explanation
           </Button>
+
           <Button
-            onClick={handleNext}
-            disabled={!answers[currentQuestion] || savingResult}
-            loading={savingResult}
-            loaderProps={{ children: <IconMantineLoader size="1rem" /> }} // Removed animate-spin from here
-            rightSection={!savingResult ? <IconChevronRight size="1rem" /> : undefined}
+            onClick={handleMainAction}
+            disabled={!isCurrentAnswerSelected || savingResult} // Disabled if no answer selected, or if already saving
+            loading={savingResult && answerLocked && isLastQuestion} // Show loading only when finishing
+            loaderProps={{ children: <IconMantineLoader size="1rem" /> }}
+            leftSection={(savingResult && answerLocked && isLastQuestion) ? undefined : <MainActionButtonIcon size="1.1rem" />}
           >
-            {currentQuestion < quizData.length - 1 ? "Next Question" : "Finish Quiz"}
+            {mainActionButtonText}
           </Button>
         </Group>
       </Stack>

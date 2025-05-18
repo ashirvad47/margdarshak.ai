@@ -126,12 +126,15 @@ export default function QuizList({ assessments }) {
         title="Quiz Result Details"
         size="xl" // xl is good for more content
         centered
+        yOffset="15vh"
         overlayProps={{ backgroundOpacity: 0.55, blur: 3 }}
         styles={{
             body: { 
-                // Ensure body can grow and then enable scrolling if needed
-                // maxHeight: 'calc(100vh - 160px)', // Example: 80px top/bottom margin
-                // overflowY: 'auto', // This will apply to the modal's direct body
+                 maxHeight: 'calc(100vh - 180px)', 
+                 overflowY: 'auto',
+                 display: 'flex',
+                 flexDirection: 'column',
+                 justifyContent: 'space-between',
             },
         }}
       >

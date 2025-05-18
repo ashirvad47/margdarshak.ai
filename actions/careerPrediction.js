@@ -134,15 +134,11 @@ export async function generateSkillsForCareerWithGemini(careerNameOrContext, ind
   }
 }
 
-// MODIFIED function signature for saveFinalCareerChoice
 export async function saveFinalCareerChoice(industry, subIndustry, skills, careerNameForSkillContext) {
   const { userId: clerkUserId } = await auth();
   if (!clerkUserId) throw new Error("Unauthorized: User not authenticated.");
   if (!industry) throw new Error("Industry is required.");
-  // subIndustry is now mandatory if the chosen industry has sub-industries.
-  // This validation should ideally happen on the client, but a check here is also good.
-  // For now, we assume client sends valid subIndustry or null/empty string if not applicable.
-
+ 
   if (!Array.isArray(skills)) {
     throw new Error("Skills must be provided as an array.");
   }
@@ -153,13 +149,13 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
   });
   if (!user) throw new Error("User not found.");
 
-  // Validate skills (simple validation for now)
+
   const validatedSkills = skills.map(skill => String(skill).trim()).filter(Boolean).slice(0, 25); // Max 25 skills
 
   try {
     const updatedUser = await db.$transaction(async (tx) => {
       let industryInsight = await tx.industryInsight.findUnique({
-        where: { industry: industry }, // Use the main industry for insights
+        where: { industry: industry },
       });
 
       if (!industryInsight) {
@@ -168,9 +164,6 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
           const newInsightsData = await generateAIInsights(industry); 
           if (typeof newInsightsData !== 'object' || newInsightsData === null) {
             console.error("generateAIInsights returned a non-object payload:", newInsightsData, "for industry:", industry);
-            // Decide how to handle: throw, or create a minimal IndustryInsight
-            // For now, let's throw to make it obvious during debugging.
-            // In production, you might want to create a placeholder IndustryInsight.
             throw new Error(`Failed to generate valid insights data structure for industry: ${industry}. Received: ${JSON.stringify(newInsightsData)}`);
           }
           industryInsight = await tx.industryInsight.create({
@@ -183,19 +176,19 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
           console.log(`Generated and saved new IndustryInsight for '${industry}'`);
         } catch (insightError) {
             console.error(`Failed to generate IndustryInsight for '${industry}' during user choice save: ${insightError.message}. User's industry/subIndustry/skills will still be set.`);
-            // Allow transaction to continue, dashboard might show "insights unavailable"
+            
         }
       }
 
-      const userWithFinalChoice = await tx.user.update({
+      const userWithFinalChoiceInTx = await tx.user.update({
         where: { id: user.id },
         data: {
           industry: industry,
-          subIndustry: subIndustry || null, // Save subIndustry, store null if empty/not applicable
-          skills: validatedSkills, // Save the skills passed from the frontend
+          subIndustry: subIndustry || null, 
+          skills: validatedSkills,
         },
       });
-      return userWithFinalChoice;
+      return userWithFinalChoiceInTx;
     });
 
     console.log(`User ${user.id} finalized career choice to industry: ${industry}, subIndustry: ${subIndustry || 'N/A'}, skills: ${validatedSkills.join(', ')}`);
@@ -204,14 +197,14 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
     revalidatePath("/dashboard");
 
     return { 
-      ...userWithFinalChoice, // Ensure this is the user object from the transaction
-      industry: userWithFinalChoice.industry, // Use the updated values
-      subIndustry: userWithFinalChoice.subIndustry,
-      skills: userWithFinalChoice.skills // CRITICAL: Return the skills as saved
-  };
+      ...updatedUser, 
+      industry: updatedUser.industry,
+      subIndustry: updatedUser.subIndustry,
+      skills: updatedUser.skills 
+    };
   } catch (error) {
     console.error(`Error saving final career choice for user ${user.id}:`, error);
-    if (error.message?.includes("SAFETY")) { // Check for specific safety errors from Gemini
+    if (error.message?.includes("SAFETY")) { 
         throw new Error("Could not finalize career choice due to content policy issues, possibly with industry data generation.");
     }
     throw new Error(`Failed to save your career choice. Original error: ${error.message}`);
