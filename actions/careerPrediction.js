@@ -32,17 +32,6 @@ export async function getUserMlProfile() {
   return userProfile;
 }
 
-const getDummyPredictionsFromMLModel = async (userProfileData) => {
-  console.log("Simulating ML prediction with profile data:", userProfileData);
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  return [
-    { career: "AI / Machine Learning Engineer", probability: 0.88 },
-    { career: "Cloud Solutions Architect", probability: 0.75 },
-    { career: "Cybersecurity Analyst", probability: 0.65 },
-    { career: "Software Developer", probability: 0.59 },
-    { career: "Data Scientist", probability: 0.52 },
-  ];
-};
 
 export async function getCareerPredictions() {
   const { userId: clerkUserId } = await auth();
@@ -62,31 +51,77 @@ export async function getCareerPredictions() {
   if (!userMlProfile) {
     throw new Error("User ML profile not found. Please complete your profile details first.");
   }
+
   if (!userMlProfile.fieldOfStudy) {
-    throw new Error("Your profile is missing key information (e.g., Field of Study) required for career prediction.");
+    console.error("User ML profile is missing 'fieldOfStudy'. Cannot proceed with prediction.");
+    throw new Error("Your profile is missing key information (Field of Study) required for career prediction. Please complete your onboarding.");
   }
 
-  const modelInputData = {
-    Field: userMlProfile.fieldOfStudy, GPA: userMlProfile.gpa,
-    Extracurricular_Activities: userMlProfile.extracurricularActivities, Internships: userMlProfile.internships,
-    Projects: userMlProfile.projects, Leadership_Positions: userMlProfile.leadershipPositions,
-    Field_Specific_Courses: userMlProfile.fieldSpecificCourses, Research_Experience: userMlProfile.researchExperience,
-    Coding_Skills: userMlProfile.codingSkills, Communication_Skills: userMlProfile.communicationSkills,
-    Problem_Solving_Skills: userMlProfile.problemSolvingSkills, Teamwork_Skills: userMlProfile.teamworkSkills,
-    Analytical_Skills: userMlProfile.analyticalSkills, Presentation_Skills: userMlProfile.presentationSkills,
-    Networking_Skills: userMlProfile.networkingSkills, Industry_Certifications: userMlProfile.industryCertifications,
+  const featuresForApi = {
+    Field: userMlProfile.fieldOfStudy, // Assumed to be always present
+    GPA: userMlProfile.gpa === null || userMlProfile.gpa === undefined ? 0.0 : parseFloat(userMlProfile.gpa),
+    Leadership_Positions: userMlProfile.leadershipPositions === null || userMlProfile.leadershipPositions === undefined ? 0 : parseInt(userMlProfile.leadershipPositions, 10),
+    Research_Experience: userMlProfile.researchExperience === null || userMlProfile.researchExperience === undefined ? 0 : parseInt(userMlProfile.researchExperience, 10),
+    Industry_Certifications: userMlProfile.industryCertifications === null || userMlProfile.industryCertifications === undefined ? 0 : parseInt(userMlProfile.industryCertifications, 10),
+    Extracurricular_Activities: userMlProfile.extracurricularActivities === null || userMlProfile.extracurricularActivities === undefined ? 0 : parseInt(userMlProfile.extracurricularActivities, 10),
+    Internships: userMlProfile.internships === null || userMlProfile.internships === undefined ? 0 : parseInt(userMlProfile.internships, 10),
+    Projects: userMlProfile.projects === null || userMlProfile.projects === undefined ? 0 : parseInt(userMlProfile.projects, 10),
+    Field_Specific_Courses: userMlProfile.fieldSpecificCourses === null || userMlProfile.fieldSpecificCourses === undefined ? 0 : parseInt(userMlProfile.fieldSpecificCourses, 10),
+    Coding_Skills: userMlProfile.codingSkills === null || userMlProfile.codingSkills === undefined ? 0 : parseInt(userMlProfile.codingSkills, 10),
+    Communication_Skills: userMlProfile.communicationSkills === null || userMlProfile.communicationSkills === undefined ? 0 : parseInt(userMlProfile.communicationSkills, 10),
+    Problem_Solving_Skills: userMlProfile.problemSolvingSkills === null || userMlProfile.problemSolvingSkills === undefined ? 0 : parseInt(userMlProfile.problemSolvingSkills, 10),
+    Teamwork_Skills: userMlProfile.teamworkSkills === null || userMlProfile.teamworkSkills === undefined ? 0 : parseInt(userMlProfile.teamworkSkills, 10),
+    Analytical_Skills: userMlProfile.analyticalSkills === null || userMlProfile.analyticalSkills === undefined ? 0 : parseInt(userMlProfile.analyticalSkills, 10),
+    Presentation_Skills: userMlProfile.presentationSkills === null || userMlProfile.presentationSkills === undefined ? 0 : parseInt(userMlProfile.presentationSkills, 10),
+    Networking_Skills: userMlProfile.networkingSkills === null || userMlProfile.networkingSkills === undefined ? 0 : parseInt(userMlProfile.networkingSkills, 10),
+  };
+
+  const payload = {
+    features: featuresForApi,
   };
 
   try {
-    const predictions = await getDummyPredictionsFromMLModel(modelInputData);
-    if (!predictions || !Array.isArray(predictions)) {
-        console.error("Invalid prediction format received from dummy model:", predictions);
-        throw new Error("Received invalid format from prediction service.");
+    console.log("Sending payload to FastAPI:", JSON.stringify(payload, null, 2));
+    // Ensure your FastAPI server is running locally on http://127.0.0.1:8000
+    const response = await fetch("http://127.0.0.1:8000/predict/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "accept": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text(); // Get more details if possible
+      console.error(`FastAPI Error ${response.status}: ${response.statusText}`, errorBody);
+      throw new Error(`Failed to get predictions from API. Status: ${response.status}. Details: ${errorBody}`);
     }
-    return predictions;
+
+    const predictionsData = await response.json();
+
+    // The FastAPI endpoint returns: { predicted_career: "...", top_predictions: [{career: "...", probability: ...}, ...] }
+    // We need to adapt this to the format previously expected from getDummyPredictionsFromMLModel,
+    // which was an array like: [{ career: "...", probability: ...}, ...]
+    // The main `predicted_career` is usually the first one in `top_predictions` or closely related.
+    // For now, let's just return the `top_predictions` array, which matches the dummy format.
+
+    if (!predictionsData.top_predictions || !Array.isArray(predictionsData.top_predictions)) {
+        console.error("Invalid prediction format received from FastAPI:", predictionsData);
+        throw new Error("Received invalid format from prediction service (FastAPI). Expected 'top_predictions' array.");
+    }
+
+    console.log("Received predictions from FastAPI:", predictionsData.top_predictions);
+    return predictionsData.top_predictions;
+
   } catch (error) {
-    console.error("Error in getCareerPredictions calling dummy model:", error);
-    throw new Error(`Failed to get career predictions: ${error.message}`);
+    console.error("Error in getCareerPredictions calling FastAPI:", error);
+    if (error.message.startsWith("Failed to get predictions from API") || 
+        error.message.startsWith("Received invalid format") ||
+        error.message.includes("fetch failed")) { 
+        throw new Error(`Could not connect to the prediction service or the service returned an error: ${error.message}. Please ensure the FastAPI server is running and accessible.`);
+    }
+    throw new Error(`Failed to connect to or process response from the prediction service: ${error.message}`);
   }
 }
 
