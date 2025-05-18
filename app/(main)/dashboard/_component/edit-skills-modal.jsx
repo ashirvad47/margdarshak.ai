@@ -21,7 +21,7 @@ const EditSkillsModal = ({ opened, onClose, currentSkills = [], onSkillsSave }) 
   useEffect(() => {
     if (opened) {
       console.log("Modal opened, received currentSkills:", currentSkills);
-      setSkills([...currentSkills]); // Spread to create a new array copy for local state
+      setSkills(Array.isArray(currentSkills) ? [...currentSkills] : []); 
       setNewSkill(''); // Clear input field when modal opens
     }
   }, [currentSkills, opened]);
@@ -61,9 +61,6 @@ const EditSkillsModal = ({ opened, onClose, currentSkills = [], onSkillsSave }) 
   };
 
   const handleSave = async () => {
-    // No need to check skills.length === 0 for error, as user might want to save an empty skill list.
-    // Or, if a minimum is required, that validation should be there.
-    // For now, allowing empty list to be saved.
     await saveSkillsFn(skills);
   };
 

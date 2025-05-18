@@ -5,9 +5,31 @@ import { IconBrain, IconTargetArrow, IconTrophy } from '@tabler/icons-react';
 import { Paper, Text, Title, Group, SimpleGrid } from '@mantine/core';
 
 export default function StatsCards({ assessments }) {
-  const getAverageScore = () => { /* ... (no change) ... */ };
-  const getLatestAssessment = () => { /* ... (no change) ... */ };
-  const getTotalQuestions = () => { /* ... (no change) ... */ };
+const getAverageScore = () => {
+  if (!assessments || assessments.length === 0) return "0.0"; // Return string "0.0"
+  const validAssessments = assessments.filter(quiz => typeof quiz.quizScore === 'number' && !isNaN(quiz.quizScore));
+  if (validAssessments.length === 0) return "0.0"; // Return string "0.0"
+  const totalScore = validAssessments.reduce((sum, quiz) => sum + quiz.quizScore, 0);
+  const average = totalScore / validAssessments.length;
+  return average.toFixed(1); // This will be a string
+};
+  const getLatestAssessment = () => {
+  if (!assessments || assessments.length === 0) return null;
+  // Assuming assessments are sorted createdAt descending by the backend
+  return assessments[0];
+};
+   const getTotalQuestions = () => {
+    if (!assessments || assessments.length === 0) return 0;
+    // Each assessment.questions is an array of question objects.
+    // We sum the length of these arrays across all assessments.
+    return assessments.reduce((total, assessment) => {
+        // Ensure assessment.questions exists and is an array
+        if (assessment.questions && Array.isArray(assessment.questions)) {
+            return total + assessment.questions.length;
+        }
+        return total;
+    }, 0);
+  };
 
   const stats = [
     { title: "Average Score", Icon: IconTrophy, value: `${getAverageScore()}%`, description: "Across all assessments" },

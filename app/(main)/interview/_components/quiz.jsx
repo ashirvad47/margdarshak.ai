@@ -1,26 +1,19 @@
+// File: app/(main)/interview/_components/quiz.jsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
-    Button,
-    Paper,
-    Text,
-    Title,
-    Group,
-    Stack,
-    Radio, // Mantine Radio
-    LoadingOverlay,
-    Box,
-    Alert, // For explanation
+    Button, Paper, Text, Title, Group, Stack, Radio,
+    LoadingOverlay, Box, Alert, Center, // Added Center
 } from "@mantine/core";
-import { IconInfoCircle, IconPlayerPlay, IconChevronRight, IconLoader2 } from '@tabler/icons-react';
+import { IconInfoCircle, IconPlayerPlay, IconChevronRight, IconLoader2 as IconMantineLoader } from '@tabler/icons-react'; // Aliased IconLoader2
 import { generateQuiz, saveQuizResult } from "@/actions/interview";
-import QuizResult from "./quiz-result"; // This will also need refactoring
+import QuizResult from "./quiz-result";
 import useFetch from "@/hooks/use-fetch";
-import { BarLoader } from "react-spinners"; // Keeping this for initial load as it was there
+// Removed BarLoader from react-spinners, will use Mantine's Loader
 
-export default function Quiz() {
+export default function Quiz({ quizParams }) { // Accept quizParams
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState([]);
   const [showExplanation, setShowExplanation] = useState(false);
@@ -29,7 +22,7 @@ export default function Quiz() {
     loading: generatingQuiz,
     fn: generateQuizFn,
     data: quizData,
-    error: quizError, // Added error handling
+    error: quizError,
   } = useFetch(generateQuiz);
 
   const {
@@ -37,8 +30,16 @@ export default function Quiz() {
     fn: saveQuizResultFn,
     data: resultData,
     setData: setResultData,
-    error: saveError, // Added error handling
+    error: saveError,
   } = useFetch(saveQuizResult);
+
+  // Fetch quiz when component mounts with new params
+  useEffect(() => {
+    if (quizParams) { // Ensure quizParams are available
+        console.log("Quiz component: Generating quiz with params:", quizParams);
+        generateQuizFn(quizParams);
+    }
+  }, [quizParams, generateQuizFn]); // Add generateQuizFn to dependencies
 
   useEffect(() => {
     if (quizData) {
@@ -47,18 +48,15 @@ export default function Quiz() {
   }, [quizData]);
 
   useEffect(() => {
-    if (quizError) {
-        toast.error(quizError.message || "Failed to generate quiz.");
-    }
-    if (saveError) {
-        toast.error(saveError.message || "Failed to save quiz results.");
-    }
+    if (quizError) toast.error(quizError.message || "Failed to generate quiz.");
+    if (saveError) toast.error(saveError.message || "Failed to save quiz results.");
   }, [quizError, saveError]);
 
-  const handleAnswer = (value) => { // Mantine Radio.Group onChange provides the value directly
+  const handleAnswer = (value) => {
     const newAnswers = [...answers];
     newAnswers[currentQuestion] = value;
     setAnswers(newAnswers);
+    setShowExplanation(false); // Hide explanation when a new answer is selected
   };
 
   const handleNext = () => {
@@ -83,47 +81,73 @@ export default function Quiz() {
 
   const finishQuiz = async () => {
     const score = calculateScore();
-    await saveQuizResultFn(quizData, answers, score);
-    // Toast handled by useFetch effect or can be specific here
+    // Pass quizParams to saveQuizResultFn
+    await saveQuizResultFn(quizData, answers, score, quizParams);
   };
 
-  const startNewQuiz = () => {
+  const startNewQuizFromResults = () => {
+    // This function is called from QuizResult.
+    // It should ideally navigate back to the config page or re-trigger with same params if desired.
+    // For now, let's assume it re-triggers with the same params.
     setCurrentQuestion(0);
     setAnswers([]);
     setShowExplanation(false);
-    setResultData(null); // Clear previous results
-    generateQuizFn();
+    setResultData(null);
+    if (quizParams) {
+        generateQuizFn(quizParams);
+    }
+  };
+  
+  // This function is for the button if no quizData is loaded initially (e.g., error state)
+  const startNewQuizFromEmptyState = () => {
+    setCurrentQuestion(0);
+    setAnswers([]);
+    setShowExplanation(false);
+    setResultData(null);
+    if (quizParams) {
+        generateQuizFn(quizParams);
+    } else {
+        // Fallback if quizParams somehow aren't set, though they should be from mock/page.jsx
+        toast.error("Quiz configuration missing. Please go back and configure your quiz.");
+        // Potentially redirect: router.push('/interview');
+    }
   };
 
-  if (generatingQuiz) {
-    return <BarLoader color="var(--mantine-primary-color-filled)" width="100%" />;
+
+  if (generatingQuiz && !quizData) { // Show loader only if no data yet
+    return <Center style={{height: '300px'}}><LoadingOverlay visible={true} /></Center>;
   }
 
-  if (resultData && !savingResult) { // Ensure saving is complete before showing results
+  if (resultData && !savingResult) {
     return (
       <Box p="md">
-        <QuizResult result={resultData} onStartNew={startNewQuiz} />
+        <QuizResult result={resultData} onStartNew={startNewQuizFromResults} />
       </Box>
     );
   }
 
-  if (!quizData || quizData.length === 0) {
+  // If quiz generation failed or returned empty
+  if (!generatingQuiz && (!quizData || quizData.length === 0)) {
     return (
       <Paper shadow="sm" p="xl" withBorder radius="md" ta="center">
         <Stack align="center" gap="md">
             <IconPlayerPlay size="3rem" stroke={1.5} color="var(--mantine-color-gray-6)" />
-            <Title order={3}>Ready to Test Your Knowledge?</Title>
+            <Title order={3}>{quizError ? "Quiz Generation Failed" : "No Questions Generated"}</Title>
             <Text c="dimmed" size="sm" maw={500}>
-                This quiz contains 10 questions specific to your industry and
-                skills. Take your time and choose the best answer for each question.
+                {quizError ? quizError.message : "We couldn't generate questions based on your selection. Please try different parameters or try again later."}
             </Text>
-            <Button onClick={generateQuizFn} size="md" mt="md" leftSection={<IconPlayerPlay size="1.125rem"/>}>
-                Start Quiz
+            {/* The button to retry with current params */}
+            <Button onClick={startNewQuizFromEmptyState} size="md" mt="md" leftSection={<IconPlayerPlay size="1.125rem"/>}>
+                Retry Quiz Generation
             </Button>
         </Stack>
       </Paper>
     );
   }
+  
+  // This ensures we don't try to render quizData[currentQuestion] if quizData is null or empty
+  if (!quizData || quizData.length === 0) return null;
+
 
   const question = quizData[currentQuestion];
 
@@ -137,7 +161,7 @@ export default function Quiz() {
         <Text fz="lg" fw={500}>{question.question}</Text>
 
         <Radio.Group
-          value={answers[currentQuestion]}
+          value={answers[currentQuestion] || ""} // Ensure value is not null for controlled component
           onChange={handleAnswer}
           name={`question-${currentQuestion}`}
         >
@@ -147,7 +171,7 @@ export default function Quiz() {
                 key={index}
                 value={option}
                 label={option}
-                id={`option-${currentQuestion}-${index}`} // Unique ID
+                id={`option-${currentQuestion}-${index}`}
               />
             ))}
           </Stack>
@@ -155,12 +179,8 @@ export default function Quiz() {
 
         {showExplanation && question.explanation && (
           <Alert
-            variant="light"
-            color="blue" // Or another subtle color
-            title="Explanation"
-            icon={<IconInfoCircle />}
-            mt="lg"
-            radius="md"
+            variant="light" color="blue" title="Explanation"
+            icon={<IconInfoCircle />} mt="lg" radius="md"
           >
             {question.explanation}
           </Alert>
@@ -169,8 +189,7 @@ export default function Quiz() {
         <Group justify="space-between" mt="xl">
           <Button
             onClick={() => setShowExplanation(true)}
-            variant="outline"
-            color="gray"
+            variant="outline" color="gray"
             disabled={!answers[currentQuestion] || showExplanation}
           >
             Show Explanation
@@ -179,12 +198,10 @@ export default function Quiz() {
             onClick={handleNext}
             disabled={!answers[currentQuestion] || savingResult}
             loading={savingResult}
-            loaderProps={{ children: <IconLoader2 size="1rem" className="animate-spin"/> }}
+            loaderProps={{ children: <IconMantineLoader size="1rem" /> }} // Removed animate-spin from here
             rightSection={!savingResult ? <IconChevronRight size="1rem" /> : undefined}
           >
-            {currentQuestion < quizData.length - 1
-              ? "Next Question"
-              : "Finish Quiz"}
+            {currentQuestion < quizData.length - 1 ? "Next Question" : "Finish Quiz"}
           </Button>
         </Group>
       </Stack>

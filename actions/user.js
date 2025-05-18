@@ -56,12 +56,11 @@ export async function updateUserSkills(newSkills) {
   const { userId: clerkUserId } = await auth();
   if (!clerkUserId) throw new Error("Unauthorized");
 
-  if (!Array.isArray(newSkills) || !newSkills.every(skill => typeof skill === 'string')) {
+   if (!Array.isArray(newSkills) || !newSkills.every(skill => typeof skill === 'string')) {
     throw new Error("Invalid skills format. Expected an array of strings.");
   }
 
-  // Optional: Add validation for skill length, count, etc. if needed
-  const validatedSkills = newSkills.map(skill => skill.trim()).filter(Boolean);
+  const validatedSkills = newSkills.map(skill => skill.trim()).filter(Boolean).slice(0, 25);
 
   try {
     const updatedUser = await db.user.update({
