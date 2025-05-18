@@ -17,12 +17,12 @@ export const generateAIInsights = async (industry) => {
       ],
       "growthRate": number,
       "demandLevel": "High" | "Medium" | "Low",
-      "topSkills": ["skill1", "skill2", "skill3", "skill4", "skill5"], 
+      "topSkills": ["skill1", "skill2", "skill3", "skill4", "skill5"],
       "marketOutlook": "Positive" | "Neutral" | "Negative",
-      "keyTrends": ["trend1", "trend2", "trend3", "trend4", "trend5"], 
+      "keyTrends": ["trend1", "trend2", "trend3", "trend4", "trend5"],
       "recommendedSkills": ["skill1", "skill2", "skill3", "skill4", "skill5", "skill6", "skill7", "skill8", "skill9", "skill10"]
     }
-    
+
     IMPORTANT: Return ONLY the JSON. No additional text, notes, or markdown formatting.
     Include at least 5 common roles for salary ranges.
     Growth rate should be a percentage.
@@ -31,19 +31,95 @@ export const generateAIInsights = async (industry) => {
     List a minimum of 5 top skills currently in demand.
   `;
 
-  const result = await model.generateContent(prompt);
-  const response = result.response;
-  const text = response.text();
-  // Attempt to remove markdown only if it's likely present.
-  let cleanedText = text.replace(/^```json\s*([\s\S]*?)\s*```$/, "$1").trim();
-  
+  let rawText = "";
+  let textToParse = "";
+
   try {
-    return JSON.parse(cleanedText);
-  } catch (parseError) {
-    console.error("Failed to parse AI insights JSON. Raw text:", text, "Cleaned text:", cleanedText, parseError);
-    // It's often helpful to see more of the invalid JSON
-    const errorContext = cleanedText.length > 500 ? cleanedText.substring(0, 500) + "..." : cleanedText;
-    throw new Error(`AI returned malformed JSON for industry insights. Cleaned text snippet: ${errorContext}`);
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+
+    if (!response) {
+      let noResponseErrorMsg = `AI did not provide a response for industry: ${industry}.`;
+      if (result.promptFeedback && result.promptFeedback.blockReason) {
+        noResponseErrorMsg += ` Blocked due to: ${result.promptFeedback.blockReason}.`;
+         if (result.promptFeedback.safetyRatings) {
+            noResponseErrorMsg += ` Safety ratings: ${JSON.stringify(result.promptFeedback.safetyRatings)}`;
+        }
+      } else {
+        noResponseErrorMsg += ` Full API result: ${JSON.stringify(result)}`;
+      }
+      console.error(noResponseErrorMsg);
+      throw new Error(noResponseErrorMsg);
+    }
+
+    if (typeof response.text !== 'function' || !response.candidates || response.candidates.length === 0) {
+        let detailedError = `AI response structure was unexpected for industry: ${industry}.`;
+        if (response.promptFeedback && response.promptFeedback.blockReason) {
+            detailedError += ` Blocked due to: ${response.promptFeedback.blockReason}.`;
+             if (response.promptFeedback.safetyRatings) {
+                detailedError += ` Safety ratings: ${JSON.stringify(response.promptFeedback.safetyRatings)}`;
+            }
+        } else if (response.text && typeof response.text === 'string') { // Handle cases where .text is a direct string (e.g. error messages)
+             rawText = response.text;
+        } else if (response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts && response.candidates[0].content.parts[0] && response.candidates[0].content.parts[0].text) {
+             rawText = response.candidates[0].content.parts[0].text || "";
+        } else {
+            detailedError += ` Missing candidates or text method. Full response: ${JSON.stringify(response)}`;
+            console.error(detailedError);
+            throw new Error(detailedError);
+        }
+        // If rawText is still not set (and not explicitly blocked), it means structure is truly unexpected
+        if (!rawText && !(response.promptFeedback && response.promptFeedback.blockReason)) {
+            console.error(detailedError + ` Raw text fallback failed. Full response: ${JSON.stringify(response)}`);
+            throw new Error(detailedError + ` Raw text fallback failed.`);
+        }
+    } else {
+        rawText = response.text();
+    }
+
+    if (typeof rawText !== 'string' || rawText.trim() === "") {
+        let emptyTextErrorMsg = `AI returned empty or non-string content for industry: ${industry}.`;
+         if (response?.promptFeedback && response.promptFeedback.blockReason) {
+            emptyTextErrorMsg += ` Blocked due to: ${response.promptFeedback.blockReason}.`;
+        }
+        console.error(emptyTextErrorMsg, "Raw text received (if available):", rawText);
+        throw new Error(emptyTextErrorMsg);
+    }
+
+    textToParse = rawText.trim();
+
+    // More robust stripping of markdown code fences
+    const commonJsonPrefix = "```json";
+    const commonBacktickPrefix = "```";
+
+    if (textToParse.startsWith(commonJsonPrefix)) {
+        textToParse = textToParse.substring(commonJsonPrefix.length);
+    } else if (textToParse.startsWith(commonBacktickPrefix)) {
+        textToParse = textToParse.substring(commonBacktickPrefix.length);
+    }
+
+    if (textToParse.endsWith(commonBacktickPrefix)) {
+        textToParse = textToParse.substring(0, textToParse.length - commonBacktickPrefix.length);
+    }
+    
+    textToParse = textToParse.trim(); // Trim whitespace that might have been between backticks and JSON content
+
+    if (textToParse === "") {
+        console.error(`Cleaned AI response is empty for industry: ${industry}. Original raw text was:`, rawText);
+        throw new Error(`AI returned an effectively empty JSON structure for industry: ${industry}. This might be due to content policies or an API issue.`);
+    }
+
+    const parsedJson = JSON.parse(textToParse);
+
+    if (typeof parsedJson !== 'object' || parsedJson === null || !Array.isArray(parsedJson.salaryRanges)) {
+        console.error("Parsed JSON is not a valid insight object:", parsedJson, "for industry:", industry, "Text attempted to parse:", textToParse);
+        throw new Error(`AI returned data in an unexpected object structure for industry: ${industry} after parsing. Please check AI output or prompt.`);
+    }
+    return parsedJson;
+
+  } catch (error) {
+    console.error(`Critical error in generateAIInsights for industry "${industry}": ${error.message}. Original raw text (if available): "${rawText}", Text attempted for parsing: "${textToParse}"`, error.stack);
+    throw new Error(`Failed to generate AI insights for ${industry}. Reason: ${error.message || "Unknown AI error"}`);
   }
 };
 
@@ -53,9 +129,7 @@ export async function getIndustryInsights() {
 
   const user = await db.user.findUnique({
     where: { clerkUserId: userId },
-    include: {
-      industryInsight: true,
-    },
+    select: { id: true, industry: true },
   });
 
   if (!user) throw new Error("User not found");
@@ -64,12 +138,20 @@ export async function getIndustryInsights() {
     throw new Error("User industry not set. Please complete onboarding.");
   }
 
-  if (!user.industryInsight) {
-    console.log(`Insights for '${user.industry}' not found in DB. Generating...`);
+  let existingInsight = await db.industryInsight.findUnique({
+      where: { industry: user.industry },
+  });
+
+  if (existingInsight) {
+      console.log(`Workspaceed insights for '${user.industry}' from DB.`);
+      return existingInsight;
+  }
+
+  console.log(`Insights for '${user.industry}' not found or needs update. Generating...`);
+  try {
     const insightsData = await generateAIInsights(user.industry);
 
-    // Ensure all arrays are initialized even if AI returns undefined for them
-    const industryInsight = await db.industryInsight.create({
+    const newIndustryInsight = await db.industryInsight.create({
       data: {
         industry: user.industry,
         salaryRanges: insightsData.salaryRanges || [],
@@ -78,18 +160,19 @@ export async function getIndustryInsights() {
         topSkills: insightsData.topSkills || [],
         marketOutlook: insightsData.marketOutlook || "Neutral",
         keyTrends: insightsData.keyTrends || [],
-        recommendedSkills: insightsData.recommendedSkills || [], // Ensures it's an array
+        recommendedSkills: insightsData.recommendedSkills || [],
         nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     console.log(`Generated and saved new IndustryInsight for '${user.industry}'`);
-    return industryInsight;
+    return newIndustryInsight;
+
+  } catch (error) {
+    console.error(`Failed to get or generate industry insights for ${user.industry} in getIndustryInsights: ${error.message}`);
+    throw new Error(`Could not retrieve industry insights for ${user.industry}. Please try again later or contact support if the issue persists. AI Reason: ${error.message}`);
   }
-  console.log(`Workspaceed insights for '${user.industry}' from DB.`);
-  return user.industryInsight;
 }
 
-// ... (getTrendExplanationsWithGemini function remains the same as your working version)
 export async function getTrendExplanationsWithGemini(trends, industry) {
   if (!trends || trends.length === 0) {
     return {};
@@ -120,30 +203,45 @@ export async function getTrendExplanationsWithGemini(trends, industry) {
     The keys in the JSON object MUST EXACTLY MATCH the trend strings provided in the list.
   `;
 
-  let rawTextResponse = ""; 
+  let rawTextResponse = "";
   try {
     console.log(`Requesting trend explanations for industry "${industry}" with trends:`, trends);
     const result = await model.generateContent(prompt);
     const response = result.response;
+
+    if (!response || typeof response.text !== 'function') {
+        let errorDetail = "AI response for trend explanations was missing or malformed.";
+        if (result.promptFeedback && result.promptFeedback.blockReason) {
+            errorDetail += ` Blocked due to: ${result.promptFeedback.blockReason}.`;
+        }
+        console.error(errorDetail, `Full result: ${JSON.stringify(result)}`);
+        throw new Error(errorDetail);
+    }
+
     rawTextResponse = response.text();
-    let cleanedText = rawTextResponse.trim();
+    let cleanedText = rawTextResponse.trim(); // Use a new variable for modifications
+
+    const commonJsonPrefix = "```json";
+    const commonBacktickPrefix = "```";
+
+    if (cleanedText.startsWith(commonJsonPrefix)) {
+        cleanedText = cleanedText.substring(commonJsonPrefix.length);
+    } else if (cleanedText.startsWith(commonBacktickPrefix)) {
+        cleanedText = cleanedText.substring(commonBacktickPrefix.length);
+    }
+
+    if (cleanedText.endsWith(commonBacktickPrefix)) {
+        cleanedText = cleanedText.substring(0, cleanedText.length - commonBacktickPrefix.length);
+    }
     
-    if (cleanedText.startsWith("```json")) {
-        cleanedText = cleanedText.substring(7);
-        if (cleanedText.endsWith("```")) {
-            cleanedText = cleanedText.substring(0, cleanedText.length - 3);
-        }
-        cleanedText = cleanedText.trim();
-    } else if (cleanedText.startsWith("```")) {
-        cleanedText = cleanedText.substring(3);
-        if (cleanedText.endsWith("```")) {
-            cleanedText = cleanedText.substring(0, cleanedText.length - 3);
-        }
-        cleanedText = cleanedText.trim();
+    cleanedText = cleanedText.trim();
+    
+    if (cleanedText === "") {
+        throw new Error("AI returned an empty string for trend explanations after cleaning.");
     }
 
     const explanations = JSON.parse(cleanedText);
-    if (trends.length > 0 && Object.keys(explanations).length === 0 && !cleanedText.includes("The increasing adoption")) { 
+    if (trends.length > 0 && Object.keys(explanations).length === 0 && !cleanedText.includes("The increasing adoption")) {
         console.warn("Gemini might have returned an empty JSON object for trend explanations. Raw response text:", rawTextResponse, "Cleaned text:", cleanedText);
         return trends.reduce((acc, trend) => {
             acc[trend] = "Detailed explanation currently unavailable.";
@@ -153,7 +251,7 @@ export async function getTrendExplanationsWithGemini(trends, industry) {
     return explanations;
   } catch (error) {
     console.error(`Error generating trend explanations for industry "${industry}":`, error.message);
-    console.error("Raw Gemini response text that may have caused parsing error:", rawTextResponse);
+    console.error("Raw Gemini response text for trends that may have caused parsing error:", rawTextResponse);
     return trends.reduce((acc, trend) => {
         acc[trend] = "Could not load explanation at this time due to an error.";
         return acc;
