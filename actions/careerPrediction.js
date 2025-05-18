@@ -148,7 +148,7 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
 
   const user = await db.user.findUnique({
     where: { clerkUserId },
-    select: { id: true }
+    select: { id: true, experience: true } // Fetch user's experience
   });
   if (!user) throw new Error("User not found.");
 
@@ -158,29 +158,25 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
   let existingInsight = null;
 
   try {
-    // Step 1: Check for existing insight OR generate new one if needed (OUTSIDE the transaction)
     existingInsight = await db.industryInsight.findUnique({
       where: { industry: industry },
     });
 
     if (!existingInsight) {
-      console.log(`IndustryInsight for '${industry}' not found. Generating...`);
+      console.log(`IndustryInsight for '${industry}' not found. Generating with context (Sub: ${subIndustry}, Exp: ${user.experience})...`);
       try {
-        newInsightsData = await generateAIInsights(industry); // This might throw
-        // newInsightsData is now guaranteed to be an object if no error was thrown by generateAIInsights
+        // Pass industry, subIndustry, and user.experience
+        newInsightsData = await generateAIInsights(industry, subIndustry, user.experience);
       } catch (insightGenerationError) {
         console.error(`Failed to generate IndustryInsight for '${industry}' BEFORE transaction: ${insightGenerationError.message}.`);
-        // Decide if you want to proceed without insights or throw.
-        // For critical insights, it's better to throw and inform the user.
         throw new Error(`Could not generate essential industry insights for ${industry}. Your career choice was not saved. AI Reason: ${insightGenerationError.message}`);
       }
     }
 
-    // Step 2: Perform database updates within a transaction
     const updatedUser = await db.$transaction(async (tx) => {
-      if (newInsightsData && !existingInsight) { // Only create if it was generated and didn't exist
+      if (newInsightsData && !existingInsight) {
         console.log(`Saving newly generated IndustryInsight for '${industry}' within transaction.`);
-        await tx.industryInsight.create({ // Use 'await' here
+        await tx.industryInsight.create({
           data: {
             industry: industry,
             salaryRanges: newInsightsData.salaryRanges || [],
@@ -191,10 +187,15 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
             keyTrends: newInsightsData.keyTrends || [],
             recommendedSkills: newInsightsData.recommendedSkills || [],
             nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            // lastUpdated will be default by Prisma
           },
         });
         console.log(`Saved new IndustryInsight for '${industry}' within transaction.`);
       }
+      // If existingInsight exists but might be stale and needs an update with new context,
+      // you could add an update call here. For now, we only create if it's missing.
+      // else if (existingInsight && newInsightsData) { /* logic to update existingInsight */ }
+
 
       const userWithFinalChoiceInTx = await tx.user.update({
         where: { id: user.id },
@@ -221,7 +222,6 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
 
   } catch (error) {
     console.error(`Error in saveFinalCareerChoice for user ${user.id}:`, error);
-    // Check for Prisma transaction timeout specifically if possible, or general AI failure messages
     if (error.message?.includes("Transaction already closed") || error.message?.includes("timeout")) {
         throw new Error(`Failed to save your career choice due to a timeout while processing data. Please try again. Details: ${error.message}`);
     }
@@ -237,8 +237,7 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
         ) {
       throw new Error(`Could not finalize career choice: The AI failed to generate necessary industry data. This might be due to content policies, an API issue, or the information requested. Details: ${error.message}`);
     }
-    // Fallback for other errors, including the original "payload" type error if it somehow resurfaces
-    if (error.code === 'ERR_INVALID_ARG_TYPE' && error.message.includes("payload")) {
+    if (error.code === 'ERR_INVALID_ARG_TYPE' && error.message.includes("payload")) { // Should be less likely now
         throw new Error(`Failed to save your career choice due to an internal data issue. Please try again. Details: ${error.message}`);
     }
     throw new Error(`Failed to save your career choice. Please try again. Error: ${error.message}`);
