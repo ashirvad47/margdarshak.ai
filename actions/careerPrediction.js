@@ -9,6 +9,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAIInstance = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const geminiModelInstance = genAIInstance.getGenerativeModel({ model: "gemini-1.5-flash" });
+const GENERAL_SUB_INDUSTRY_PLACEHOLDER = "_GENERAL_";
 
 export async function getUserMlProfile() {
   const { userId: clerkUserId } = await auth();
@@ -58,7 +59,7 @@ export async function getCareerPredictions() {
   }
 
   const featuresForApi = {
-    Field: userMlProfile.fieldOfStudy, // Assumed to be always present
+    Field: userMlProfile.fieldOfStudy, 
     GPA: userMlProfile.gpa === null || userMlProfile.gpa === undefined ? 0.0 : parseFloat(userMlProfile.gpa),
     Leadership_Positions: userMlProfile.leadershipPositions === null || userMlProfile.leadershipPositions === undefined ? 0 : parseInt(userMlProfile.leadershipPositions, 10),
     Research_Experience: userMlProfile.researchExperience === null || userMlProfile.researchExperience === undefined ? 0 : parseInt(userMlProfile.researchExperience, 10),
@@ -82,7 +83,6 @@ export async function getCareerPredictions() {
 
   try {
     console.log("Sending payload to FastAPI:", JSON.stringify(payload, null, 2));
-    // Ensure your FastAPI server is running locally on http://127.0.0.1:8000
     const response = await fetch("http://127.0.0.1:8000/predict/", {
       method: "POST",
       headers: {
@@ -93,18 +93,12 @@ export async function getCareerPredictions() {
     });
 
     if (!response.ok) {
-      const errorBody = await response.text(); // Get more details if possible
+      const errorBody = await response.text(); 
       console.error(`FastAPI Error ${response.status}: ${response.statusText}`, errorBody);
       throw new Error(`Failed to get predictions from API. Status: ${response.status}. Details: ${errorBody}`);
     }
 
     const predictionsData = await response.json();
-
-    // The FastAPI endpoint returns: { predicted_career: "...", top_predictions: [{career: "...", probability: ...}, ...] }
-    // We need to adapt this to the format previously expected from getDummyPredictionsFromMLModel,
-    // which was an array like: [{ career: "...", probability: ...}, ...]
-    // The main `predicted_career` is usually the first one in `top_predictions` or closely related.
-    // For now, let's just return the `top_predictions` array, which matches the dummy format.
 
     if (!predictionsData.top_predictions || !Array.isArray(predictionsData.top_predictions)) {
         console.error("Invalid prediction format received from FastAPI:", predictionsData);
@@ -121,11 +115,11 @@ export async function getCareerPredictions() {
         error.message.includes("fetch failed")) { 
         throw new Error(`Could not connect to the prediction service or the service returned an error: ${error.message}. Please ensure the FastAPI server is running and accessible.`);
     }
-    throw new Error(`Failed to connect to or process response from the prediction service: ${error.message}`);
+    // Changed this from "Failed to connect to or process response..." to be more general for other types of errors.
+    throw new Error(`Error during career prediction process: ${error.message}`); 
   }
 }
 
-// Ensure this function is exported
 export async function generateSkillsForCareerWithGemini(careerNameOrContext, industry, subIndustry, userBio, userExperience) {
   let promptContext = `For the career path related to "${careerNameOrContext}" within the "${industry}" industry`;
   if (subIndustry) {
@@ -183,37 +177,43 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
 
   const user = await db.user.findUnique({
     where: { clerkUserId },
-    select: { id: true, experience: true } // Fetch user's experience
+    select: { id: true, experience: true } 
   });
   if (!user) throw new Error("User not found.");
 
   const validatedSkills = skills.map(skill => String(skill).trim()).filter(Boolean).slice(0, 25);
+  const effectiveSubIndustryForDb = subIndustry || GENERAL_SUB_INDUSTRY_PLACEHOLDER;
 
   let newInsightsData = null;
   let existingInsight = null;
 
   try {
     existingInsight = await db.industryInsight.findUnique({
-      where: { industry: industry },
+      where: { 
+        industry_subIndustry: { 
+          industry: industry,
+          subIndustry: effectiveSubIndustryForDb,
+        }
+      },
     });
 
     if (!existingInsight) {
-      console.log(`IndustryInsight for '${industry}' not found. Generating with context (Sub: ${subIndustry}, Exp: ${user.experience})...`);
+      console.log(`IndustryInsight for '${industry}' - '${effectiveSubIndustryForDb}' not found. Generating...`);
       try {
-        // Pass industry, subIndustry, and user.experience
         newInsightsData = await generateAIInsights(industry, subIndustry, user.experience);
       } catch (insightGenerationError) {
-        console.error(`Failed to generate IndustryInsight for '${industry}' BEFORE transaction: ${insightGenerationError.message}.`);
-        throw new Error(`Could not generate essential industry insights for ${industry}. Your career choice was not saved. AI Reason: ${insightGenerationError.message}`);
+        console.error(`Failed to generate IndustryInsight for '${industry}' - '${effectiveSubIndustryForDb}' BEFORE transaction: ${insightGenerationError.message}.`);
+        throw new Error(`Could not generate essential industry insights for ${industry} (${subIndustry || 'General'}). Your career choice was not saved. AI Reason: ${insightGenerationError.message}`);
       }
     }
 
     const updatedUser = await db.$transaction(async (tx) => {
       if (newInsightsData && !existingInsight) {
-        console.log(`Saving newly generated IndustryInsight for '${industry}' within transaction.`);
+        console.log(`Saving newly generated IndustryInsight for '${industry}' - '${effectiveSubIndustryForDb}' within transaction.`);
         await tx.industryInsight.create({
           data: {
             industry: industry,
+            subIndustry: effectiveSubIndustryForDb, 
             salaryRanges: newInsightsData.salaryRanges || [],
             growthRate: newInsightsData.growthRate || 0,
             demandLevel: newInsightsData.demandLevel || "Medium",
@@ -222,21 +222,16 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
             keyTrends: newInsightsData.keyTrends || [],
             recommendedSkills: newInsightsData.recommendedSkills || [],
             nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            // lastUpdated will be default by Prisma
           },
         });
-        console.log(`Saved new IndustryInsight for '${industry}' within transaction.`);
+        console.log(`Saved new IndustryInsight for '${industry}' - '${effectiveSubIndustryForDb}' within transaction.`);
       }
-      // If existingInsight exists but might be stale and needs an update with new context,
-      // you could add an update call here. For now, we only create if it's missing.
-      // else if (existingInsight && newInsightsData) { /* logic to update existingInsight */ }
-
 
       const userWithFinalChoiceInTx = await tx.user.update({
         where: { id: user.id },
         data: {
           industry: industry,
-          subIndustry: subIndustry || null,
+          subIndustry: subIndustry || null, 
           skills: validatedSkills,
         },
       });
@@ -272,7 +267,7 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
         ) {
       throw new Error(`Could not finalize career choice: The AI failed to generate necessary industry data. This might be due to content policies, an API issue, or the information requested. Details: ${error.message}`);
     }
-    if (error.code === 'ERR_INVALID_ARG_TYPE' && error.message.includes("payload")) { // Should be less likely now
+    if (error.code === 'ERR_INVALID_ARG_TYPE' && error.message.includes("payload")) { 
         throw new Error(`Failed to save your career choice due to an internal data issue. Please try again. Details: ${error.message}`);
     }
     throw new Error(`Failed to save your career choice. Please try again. Error: ${error.message}`);

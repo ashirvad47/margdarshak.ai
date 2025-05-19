@@ -66,7 +66,7 @@ export default function RootLayout({ children }) {
             <Toaster richColors theme="light" />
             <footer className="bg-gray-50 py-8 text-center">
               <div className="container mx-auto px-4 text-sm text-gray-500">
-                <p>PKMKB</p> 
+                <p>All Rights Reserved</p> 
               </div>
             </footer>
           </MantineProvider>

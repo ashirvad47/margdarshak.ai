@@ -7,11 +7,14 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const GENERAL_SUB_INDUSTRY_PLACEHOLDER = "_GENERAL_";
 
 export const generateAIInsights = async (industry, subIndustry = null, userExperience = null) => {
   let promptContext = `Analyze the current state of the ${industry} industry.`;
-  if (subIndustry) {
-    promptContext += ` Focus particularly on the ${subIndustry} sub-industry.`;
+  const effectiveSubIndustryForPrompt = subIndustry && subIndustry !== GENERAL_SUB_INDUSTRY_PLACEHOLDER ? subIndustry : null;
+
+  if (effectiveSubIndustryForPrompt) {
+    promptContext += ` Focus particularly on the ${effectiveSubIndustryForPrompt} sub-industry.`;
   }
   if (userExperience !== null && userExperience !== undefined) {
     promptContext += ` Tailor insights, especially salary ranges and recommended skills, for a professional with approximately ${userExperience} years of experience.`;
@@ -21,24 +24,24 @@ export const generateAIInsights = async (industry, subIndustry = null, userExper
 
   const prompt = `
     ${promptContext}
-    
+
     Provide insights in ONLY the following JSON format without any additional notes or explanations:
     {
-      "salaryRanges": [ // If experience level is provided, try to reflect it here. If sub-industry is provided, specify roles relevant to it.
+      "salaryRanges": [
         { "role": "string", "min": number, "max": number, "median": number, "location": "string (e.g., USA, India, Remote)" } 
       ],
-      "growthRate": number, // For the main industry
-      "demandLevel": "High" | "Medium" | "Low", // For the main industry, with sub-industry context if provided
-      "topSkills": ["skill1", "skill2", "skill3", "skill4", "skill5"], // General and sub-industry specific if applicable
-      "marketOutlook": "Positive" | "Neutral" | "Negative", // For the main industry
-      "keyTrends": ["trend1", "trend2", "trend3", "trend4", "trend5"], // General and sub-industry specific if applicable
-      "recommendedSkills": ["skill1", "skill2", ..., "skill10"] // Tailor to sub-industry and experience level if provided
+      "growthRate": number,
+      "demandLevel": "High" | "Medium" | "Low",
+      "topSkills": ["skill1", "skill2", "skill3", "skill4", "skill5"],
+      "marketOutlook": "Positive" | "Neutral" | "Negative",
+      "keyTrends": ["trend1", "trend2", "trend3", "trend4", "trend5"],
+      "recommendedSkills": ["skill1", "skill2", ..., "skill10"]
     }
-    
+
     IMPORTANT: Return ONLY the JSON. No additional text, notes, or markdown formatting.
     - For salaryRanges: Include at least 5 common roles. If sub-industry and experience are provided, make these roles and salaries as relevant as possible. Specify location if common (e.g., "India", "USA", "Remote").
     - For growthRate and marketOutlook: These should generally pertain to the main ${industry}.
-    - For demandLevel, topSkills, keyTrends, recommendedSkills: If subIndustry is provided, make these specific to the ${subIndustry} within ${industry}. If userExperience is provided, tailor recommendedSkills accordingly.
+    - For demandLevel, topSkills, keyTrends, recommendedSkills: If subIndustry ('${effectiveSubIndustryForPrompt || 'general context'}') is provided, make these specific to it within ${industry}. If userExperience is provided, tailor recommendedSkills accordingly.
     - Ensure all string array fields (topSkills, keyTrends, recommendedSkills) have at least 5 items, and recommendedSkills ideally 8-10.
   `;
 
@@ -139,63 +142,70 @@ export async function getIndustryInsights() {
     console.error("User industry not set for user:", userId);
     throw new Error("User industry not set. Please complete onboarding.");
   }
+  const effectiveSubIndustry = user.subIndustry || GENERAL_SUB_INDUSTRY_PLACEHOLDER;
 
-  // For simplicity, we'll fetch/generate based on main industry.
-  // The tailoring happens within generateAIInsights if subIndustry/experience are passed.
-  // A more advanced system might key IndustryInsight by industry+subIndustry.
   let existingInsight = await db.industryInsight.findUnique({
-      where: { industry: user.industry },
+    where: {
+      industry_subIndustry: { // Using the compound key name from @@unique
+        industry: user.industry,
+        subIndustry: effectiveSubIndustry,
+      },
+    },
   });
 
-  // Optional: Logic to check if existingInsight.nextUpdate is stale.
-  // For now, if it exists, we use it. If not, we generate.
-  // A more sophisticated approach might re-generate if stale OR if the user's context (subIndustry, experience) has changed
-  // and we want to store a more tailored version for the main industry record.
-  // This could lead to the "last write wins" if multiple users with different contexts regenerate the same main industry insight.
+  const isStale = existingInsight && existingInsight.nextUpdate && new Date() > new Date(existingInsight.nextUpdate);
 
-  if (existingInsight /* && new Date() < new Date(existingInsight.nextUpdate) */) { // Example staleness check
-      console.log(`Workspaceed insights for '${user.industry}' from DB.`);
-      return existingInsight;
+  if (existingInsight && !isStale) {
+    console.log(`Dashboard: Using cached insights for '${user.industry}' - '${effectiveSubIndustry}' from DB.`);
+    return existingInsight;
   }
+
+  console.log(`Dashboard: Insights for '${user.industry}' - '${effectiveSubIndustry}' ${existingInsight ? 'are stale' : 'not found'}. Generating...`);
 
   console.log(`Insights for '${user.industry}' not found or needs update. Generating with context (Sub: ${user.subIndustry}, Exp: ${user.experience}).`);
   try {
-    // Pass subIndustry and experience from the user profile
-    const insightsData = await generateAIInsights(user.industry, user.subIndustry, user.experience);
+    const insightsData = await generateAIInsights(user.industry, user.subIndustry, user.experience); // Pass user.subIndustry (can be null)
 
-    // Upsert logic: create if not exists, update if it does (e.g., due to staleness)
     const newOrUpdatedIndustryInsight = await db.industryInsight.upsert({
-        where: { industry: user.industry },
-        update: {
-            salaryRanges: insightsData.salaryRanges || [],
-            growthRate: insightsData.growthRate || 0,
-            demandLevel: insightsData.demandLevel || "Medium",
-            topSkills: insightsData.topSkills || [],
-            marketOutlook: insightsData.marketOutlook || "Neutral",
-            keyTrends: insightsData.keyTrends || [],
-            recommendedSkills: insightsData.recommendedSkills || [],
-            lastUpdated: new Date(), // Always update lastUpdated
-            nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      where: {
+        industry_subIndustry: {
+          industry: user.industry,
+          subIndustry: effectiveSubIndustry,
         },
-        create: {
-            industry: user.industry,
-            salaryRanges: insightsData.salaryRanges || [],
-            growthRate: insightsData.growthRate || 0,
-            demandLevel: insightsData.demandLevel || "Medium",
-            topSkills: insightsData.topSkills || [],
-            marketOutlook: insightsData.marketOutlook || "Neutral",
-            keyTrends: insightsData.keyTrends || [],
-            recommendedSkills: insightsData.recommendedSkills || [],
-            nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        },
+      },
+      update: {
+        salaryRanges: insightsData.salaryRanges || [],
+        growthRate: insightsData.growthRate || 0,
+        demandLevel: insightsData.demandLevel || "Medium",
+        topSkills: insightsData.topSkills || [],
+        marketOutlook: insightsData.marketOutlook || "Neutral",
+        keyTrends: insightsData.keyTrends || [],
+        recommendedSkills: insightsData.recommendedSkills || [],
+        // lastUpdated is handled by @updatedAt
+        nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Set next update for 7 days
+      },
+      create: {
+        industry: user.industry,
+        subIndustry: effectiveSubIndustry,
+        salaryRanges: insightsData.salaryRanges || [],
+        growthRate: insightsData.growthRate || 0,
+        demandLevel: insightsData.demandLevel || "Medium",
+        topSkills: insightsData.topSkills || [],
+        marketOutlook: insightsData.marketOutlook || "Neutral",
+        keyTrends: insightsData.keyTrends || [],
+        recommendedSkills: insightsData.recommendedSkills || [],
+        nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
     });
 
-    console.log(`Generated/Updated and saved IndustryInsight for '${user.industry}'`);
+    console.log(`Dashboard: Generated/Updated and saved IndustryInsight for '${user.industry}' - '${effectiveSubIndustry}'`);
     return newOrUpdatedIndustryInsight;
 
   } catch (error) {
-    console.error(`Failed to get or generate industry insights for ${user.industry} in getIndustryInsights: ${error.message}`);
-    throw new Error(`Could not retrieve industry insights for ${user.industry}. Please try again later or contact support if the issue persists. AI Reason: ${error.message}`);
+    console.error(`Dashboard: Failed to get or generate industry insights for ${user.industry} - ${effectiveSubIndustry}: ${error.message}`);
+    // If generation fails, and we had stale data, maybe return stale data? Or throw.
+    // For now, let's throw. The calling page should handle this.
+    throw new Error(`Could not retrieve industry insights for ${user.industry} (${effectiveSubIndustry}). AI Reason: ${error.message}`);
   }
 }
 
