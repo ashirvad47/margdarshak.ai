@@ -10,9 +10,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAIInstance = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const geminiModelInstance = genAIInstance.getGenerativeModel({ model: "gemini-1.5-flash" });
 const GENERAL_SUB_INDUSTRY_PLACEHOLDER = "_GENERAL_";
-
-// This is the new base URL for your FastAPI service.
-// It will use the environment variable in production (Vercel) and the local URL for development.
 const FASTAPI_BASE_URL = process.env.FASTAPI_URL || "http://127.0.0.1:8000";
 
 export async function getUserMlProfile() {
@@ -36,6 +33,7 @@ export async function getUserMlProfile() {
   }
   return userProfile;
 }
+
 
 export async function getCareerPredictions() {
   const { userId: clerkUserId } = await auth();
@@ -62,7 +60,7 @@ export async function getCareerPredictions() {
   }
 
   const featuresForApi = {
-    Field: userMlProfile.fieldOfStudy,
+    Field: userMlProfile.fieldOfStudy, 
     GPA: userMlProfile.gpa === null || userMlProfile.gpa === undefined ? 0.0 : parseFloat(userMlProfile.gpa),
     Leadership_Positions: userMlProfile.leadershipPositions === null || userMlProfile.leadershipPositions === undefined ? 0 : parseInt(userMlProfile.leadershipPositions, 10),
     Research_Experience: userMlProfile.researchExperience === null || userMlProfile.researchExperience === undefined ? 0 : parseInt(userMlProfile.researchExperience, 10),
@@ -86,7 +84,7 @@ export async function getCareerPredictions() {
 
   try {
     console.log("Sending payload to FastAPI:", JSON.stringify(payload, null, 2));
-    const response = await fetch(`${FASTAPI_BASE_URL}/predict/`, { // MODIFIED LINE
+     const response = await fetch(`${FASTAPI_BASE_URL}/predict/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -96,7 +94,7 @@ export async function getCareerPredictions() {
     });
 
     if (!response.ok) {
-      const errorBody = await response.text();
+      const errorBody = await response.text(); 
       console.error(`FastAPI Error ${response.status}: ${response.statusText}`, errorBody);
       throw new Error(`Failed to get predictions from API. Status: ${response.status}. Details: ${errorBody}`);
     }
@@ -113,12 +111,13 @@ export async function getCareerPredictions() {
 
   } catch (error) {
     console.error("Error in getCareerPredictions calling FastAPI:", error);
-    if (error.message.startsWith("Failed to get predictions from API") ||
+    if (error.message.startsWith("Failed to get predictions from API") || 
         error.message.startsWith("Received invalid format") ||
-        error.message.includes("fetch failed")) {
+        error.message.includes("fetch failed")) { 
         throw new Error(`Could not connect to the prediction service or the service returned an error: ${error.message}. Please ensure the FastAPI server is running and accessible.`);
     }
-    throw new Error(`Error during career prediction process: ${error.message}`);
+    // Changed this from "Failed to connect to or process response..." to be more general for other types of errors.
+    throw new Error(`Error during career prediction process: ${error.message}`); 
   }
 }
 
@@ -148,7 +147,7 @@ export async function generateSkillsForCareerWithGemini(careerNameOrContext, ind
       text = text.substring(0, text.length - 3);
     }
     text = text.trim();
-
+    
     if (text === "") {
         throw new Error("AI returned an empty string for skill suggestions after cleaning.");
     }
@@ -190,10 +189,9 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
   let existingInsight = null;
 
   try {
-    // *** FIX APPLIED HERE ***
     existingInsight = await db.industryInsight.findUnique({
       where: {
-        IndustrySubIndustryUnique: { // Correct syntax for compound unique key
+        IndustrySubIndustryUnique: {
           industry: industry,
           subIndustry: effectiveSubIndustryForDb,
         }
@@ -254,10 +252,61 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
     };
 
   } catch (error) {
-    console.error(`Error in saveFinalCareerChoice for user ${user.id}:`, error);
-    if (error.message?.includes("Transaction already closed") || error.message?.includes("timeout")) {
-        throw new Error(`Failed to save your career choice due to a timeout while processing data. Please try again. Details: ${error.message}`);
+    // MODIFICATION START
+    const userIdForLog = user ? user.id : 'USER_ID_UNAVAILABLE_IN_CATCH';
+    let errorMessage = 'Unknown error in saveFinalCareerChoice';
+    let errorStack = 'No stack available for caught error';
+    let errorDetails = 'Could not stringify caught error';
+    let errorName = 'UnknownErrorType';
+
+    if (error instanceof Error) {
+      errorMessage = error.message || 'Error object has no message';
+      errorStack = error.stack || 'Error object has no stack';
+      errorName = error.name || 'Error';
+      try {
+        // Attempt to serialize the error safely. Include non-enumerable properties.
+        errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error));
+      } catch (stringifyError) {
+        errorDetails = `Failed to stringify error object: ${stringifyError.message}`;
+      }
+    } else {
+      // Handle cases where what's caught might not be an Error object
+      errorMessage = `A non-Error was caught: ${String(error)}`;
+      try {
+        errorDetails = JSON.stringify(error);
+      } catch (stringifyError) {
+        errorDetails = `Failed to stringify non-Error object: ${String(error)}`;
+      }
     }
-    throw new Error(`Failed to save your career choice. Please try again. Error: ${error.message}`);
+
+    console.error(`--- Primary Error in saveFinalCareerChoice for user ${userIdForLog} ---`);
+    console.error(`Error Name: ${errorName}`);
+    console.error(`Message: ${errorMessage}`);
+    console.error(`Stack Trace:\n${errorStack}`);
+    console.error(`Full Error Details (JSON attempt): ${errorDetails}`);
+    console.error('Original caught value was:', error); // Log the raw object last
+    // MODIFICATION END
+
+    // Original re-throwing logic (can be adjusted after identifying the primary error)
+    if (errorMessage.includes("Transaction already closed") || errorMessage.includes("timeout")) {
+        throw new Error(`Failed to save your career choice due to a timeout while processing data. Please try again. Details: ${errorMessage}`);
+    }
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ERR_INVALID_ARG_TYPE' && errorMessage.includes("payload")) {
+        throw new Error(`Failed to save your career choice due to an internal data issue. Please try again. Details: ${errorMessage}`);
+    }
+    // More specific checks for AI-related issues if error.message contains relevant keywords
+     if (errorMessage.includes("AI did not provide a response") ||
+        errorMessage.includes("AI response structure was unexpected") ||
+        errorMessage.includes("AI returned empty or non-string content") ||
+        errorMessage.includes("AI returned an effectively empty JSON structure") ||
+        errorMessage.includes("AI returned data in an unexpected object structure") ||
+        errorMessage.includes("Failed to generate AI insights") ||
+        errorMessage.includes("Could not generate essential industry insights") ||
+        errorMessage.includes("SAFETY") || // Gemini safety block
+        errorMessage.includes("content policy")
+        ) {
+      throw new Error(`Could not finalize career choice: The AI failed to generate necessary industry data. Details: ${errorMessage}`);
+    }
+    throw new Error(`Failed to save your career choice. Please try again. Original error: ${errorMessage}`);
   }
 }
