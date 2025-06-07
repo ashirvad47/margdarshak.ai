@@ -16,7 +16,7 @@ export const metadata = {
   title: "AI Career Coach",
   description: "Your AI-powered guide to professional success.",
   icons: {
-    icon: '/logo.png',
+    icon: '/logo2.png',
   },
 };
 
