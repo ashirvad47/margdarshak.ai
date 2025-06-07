@@ -64,7 +64,7 @@ export default function AboutUsPage() {
           About Margdarshak.ai
         </Title>
         <Center>
-            <Image src="/soa_logo.png" alt="Siksha 'O' Anusandhan" w="auto" h={120} fit="contain" />
+            <Image src="/soa-logo.png" alt="Siksha 'O' Anusandhan" w="auto" h={120} fit="contain" />
         </Center>
         <Text c="dimmed" ta="center" size="lg" maw={700} mx="auto">
           Margdarshak.ai is the result of a final year research project by a dedicated team of students from the Institute of Technical Education and Research (ITER), Siksha 'O' Anusandhan, Bhubaneswar.
