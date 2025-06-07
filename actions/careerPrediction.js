@@ -177,7 +177,7 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
 
   const user = await db.user.findUnique({
     where: { clerkUserId },
-    select: { id: true, experience: true } 
+    select: { id: true, experience: true }
   });
   if (!user) throw new Error("User not found.");
 
@@ -189,8 +189,8 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
 
   try {
     existingInsight = await db.industryInsight.findUnique({
-      where: { 
-        industry_subIndustry: { 
+      where: {
+        IndustrySubIndustryUnique: {
           industry: industry,
           subIndustry: effectiveSubIndustryForDb,
         }
@@ -213,7 +213,7 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
         await tx.industryInsight.create({
           data: {
             industry: industry,
-            subIndustry: effectiveSubIndustryForDb, 
+            subIndustry: effectiveSubIndustryForDb,
             salaryRanges: newInsightsData.salaryRanges || [],
             growthRate: newInsightsData.growthRate || 0,
             demandLevel: newInsightsData.demandLevel || "Medium",
@@ -231,7 +231,7 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
         where: { id: user.id },
         data: {
           industry: industry,
-          subIndustry: subIndustry || null, 
+          subIndustry: subIndustry || null,
           skills: validatedSkills,
         },
       });
@@ -251,25 +251,61 @@ export async function saveFinalCareerChoice(industry, subIndustry, skills, caree
     };
 
   } catch (error) {
-    console.error(`Error in saveFinalCareerChoice for user ${user.id}:`, error);
-    if (error.message?.includes("Transaction already closed") || error.message?.includes("timeout")) {
-        throw new Error(`Failed to save your career choice due to a timeout while processing data. Please try again. Details: ${error.message}`);
+    // MODIFICATION START
+    const userIdForLog = user ? user.id : 'USER_ID_UNAVAILABLE_IN_CATCH';
+    let errorMessage = 'Unknown error in saveFinalCareerChoice';
+    let errorStack = 'No stack available for caught error';
+    let errorDetails = 'Could not stringify caught error';
+    let errorName = 'UnknownErrorType';
+
+    if (error instanceof Error) {
+      errorMessage = error.message || 'Error object has no message';
+      errorStack = error.stack || 'Error object has no stack';
+      errorName = error.name || 'Error';
+      try {
+        // Attempt to serialize the error safely. Include non-enumerable properties.
+        errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error));
+      } catch (stringifyError) {
+        errorDetails = `Failed to stringify error object: ${stringifyError.message}`;
+      }
+    } else {
+      // Handle cases where what's caught might not be an Error object
+      errorMessage = `A non-Error was caught: ${String(error)}`;
+      try {
+        errorDetails = JSON.stringify(error);
+      } catch (stringifyError) {
+        errorDetails = `Failed to stringify non-Error object: ${String(error)}`;
+      }
     }
-    if (error.message?.includes("AI did not provide a response") ||
-        error.message?.includes("AI response structure was unexpected") ||
-        error.message?.includes("AI returned empty or non-string content") ||
-        error.message?.includes("AI returned an effectively empty JSON structure") ||
-        error.message?.includes("AI returned data in an unexpected object structure") ||
-        error.message?.includes("Failed to generate AI insights") ||
-        error.message?.includes("Could not generate essential industry insights") ||
-        error.message?.includes("SAFETY") ||
-        error.message?.includes("content policy")
+
+    console.error(`--- Primary Error in saveFinalCareerChoice for user ${userIdForLog} ---`);
+    console.error(`Error Name: ${errorName}`);
+    console.error(`Message: ${errorMessage}`);
+    console.error(`Stack Trace:\n${errorStack}`);
+    console.error(`Full Error Details (JSON attempt): ${errorDetails}`);
+    console.error('Original caught value was:', error); // Log the raw object last
+    // MODIFICATION END
+
+    // Original re-throwing logic (can be adjusted after identifying the primary error)
+    if (errorMessage.includes("Transaction already closed") || errorMessage.includes("timeout")) {
+        throw new Error(`Failed to save your career choice due to a timeout while processing data. Please try again. Details: ${errorMessage}`);
+    }
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ERR_INVALID_ARG_TYPE' && errorMessage.includes("payload")) {
+        throw new Error(`Failed to save your career choice due to an internal data issue. Please try again. Details: ${errorMessage}`);
+    }
+    // More specific checks for AI-related issues if error.message contains relevant keywords
+     if (errorMessage.includes("AI did not provide a response") ||
+        errorMessage.includes("AI response structure was unexpected") ||
+        errorMessage.includes("AI returned empty or non-string content") ||
+        errorMessage.includes("AI returned an effectively empty JSON structure") ||
+        errorMessage.includes("AI returned data in an unexpected object structure") ||
+        errorMessage.includes("Failed to generate AI insights") ||
+        errorMessage.includes("Could not generate essential industry insights") ||
+        errorMessage.includes("SAFETY") || // Gemini safety block
+        errorMessage.includes("content policy")
         ) {
-      throw new Error(`Could not finalize career choice: The AI failed to generate necessary industry data. This might be due to content policies, an API issue, or the information requested. Details: ${error.message}`);
+      throw new Error(`Could not finalize career choice: The AI failed to generate necessary industry data. Details: ${errorMessage}`);
     }
-    if (error.code === 'ERR_INVALID_ARG_TYPE' && error.message.includes("payload")) { 
-        throw new Error(`Failed to save your career choice due to an internal data issue. Please try again. Details: ${error.message}`);
-    }
-    throw new Error(`Failed to save your career choice. Please try again. Error: ${error.message}`);
+    throw new Error(`Failed to save your career choice. Please try again. Original error: ${errorMessage}`);
   }
 }

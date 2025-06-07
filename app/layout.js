@@ -3,6 +3,7 @@ import "./globals.css"; // Your global styles, Tailwind base
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
 import Header from "@/components/header";
+import { Footer } from "@/components/footer"; // Import the new Footer
 
 
 import '@mantine/core/styles.css'; 
@@ -42,33 +43,25 @@ export default function RootLayout({ children }) {
         },
       }}
     >
-      {/* Correct usage of mantineHtmlProps as an object */}
       <html lang="en" {...mantineHtmlProps}>
         <head>
           <ColorSchemeScript defaultColorScheme="light" />
         </head>
         <body className={inter.className}>
-          {/*
-            withNormalizeCSS: Applies Mantine's NormalizeCSS
-            withGlobalStyles: Applies Mantine's default global styles (fonts, body styles, etc.)
-            These are good to include for a consistent base.
-          */}
           <MantineProvider
             theme={theme}
             defaultColorScheme="light"
             withNormalizeCSS
             withGlobalStyles
           >
-            <Header />
-            <main className="min-h-screen pt-16"> {/* pt-16 for fixed header */}
-              {children}
-            </main>
-            <Toaster richColors theme="light" />
-            <footer className="bg-gray-50 py-8 text-center">
-              <div className="container mx-auto px-4 text-sm text-gray-500">
-                <p>All Rights Reserved</p> 
-              </div>
-            </footer>
+            <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+              <Header />
+              <main className="min-h-screen pt-16" style={{ flexGrow: 1 }}>
+                {children}
+              </main>
+              <Toaster richColors theme="light" />
+              <Footer />
+            </div>
           </MantineProvider>
         </body>
       </html>

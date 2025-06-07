@@ -146,7 +146,7 @@ export async function getIndustryInsights() {
 
   let existingInsight = await db.industryInsight.findUnique({
     where: {
-      industry_subIndustry: { // Using the compound key name from @@unique
+      IndustrySubIndustryUnique: { 
         industry: user.industry,
         subIndustry: effectiveSubIndustry,
       },
@@ -168,7 +168,7 @@ export async function getIndustryInsights() {
 
     const newOrUpdatedIndustryInsight = await db.industryInsight.upsert({
       where: {
-        industry_subIndustry: {
+        IndustrySubIndustryUnique: {
           industry: user.industry,
           subIndustry: effectiveSubIndustry,
         },

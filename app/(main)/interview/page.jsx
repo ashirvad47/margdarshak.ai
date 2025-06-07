@@ -178,7 +178,7 @@ export default function InterviewPrepPage() {
                                     fullWidth
                                     disabled={!isValid}
                                 >
-                                    Start Mock Interview
+                                    Start Quiz
                                 </Button>
                             </Stack>
                         </form>

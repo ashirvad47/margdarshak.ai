@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import Image from "next/image";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Title, Text, Group, Stack, Center, Box } from '@mantine/core';
 import { IconPlayerPlay, IconBrandYoutube } from '@tabler/icons-react';
@@ -30,15 +29,13 @@ const NEW_PARTICLE_COLOR_LIGHT_THEME = "#7EC6C3";
 const NEW_PARTICLE_COLOR_DARK_THEME = "#F0F0F0";
 
 // YouTube Button Colors
-const YOUTUBE_RED_FILL = "#FF0033"; 
-const YOUTUBE_INITIAL_TEXT_COLOR_CLASS = "text-neutral-800"; 
-const YOUTUBE_HOVER_TEXT_COLOR_CLASS = "text-white"; 
-// THIS IS THE ONLY MODIFIED LINE FROM YOUR ORIGINAL FILE:
-const YOUTUBE_INITIAL_BORDER_COLOR_CLASS = "border-gray-300"; // Was "border-neutral-400"
+const YOUTUBE_RED_FILL = "#FF0033";
+const YOUTUBE_INITIAL_TEXT_COLOR_CLASS = "text-neutral-800";
+const YOUTUBE_HOVER_TEXT_COLOR_CLASS = "text-white";
+const YOUTUBE_INITIAL_BORDER_COLOR_CLASS = "border-gray-300";
 
 
 const HeroSection = () => {
-  const imageRef = useRef(null);
   const { resolvedTheme } = useTheme();
   const [particleColor, setParticleColor] = useState(NEW_PARTICLE_COLOR_LIGHT_THEME);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
@@ -49,25 +46,6 @@ const HeroSection = () => {
   useEffect(() => {
     setParticleColor(resolvedTheme === "dark" ? NEW_PARTICLE_COLOR_DARK_THEME : NEW_PARTICLE_COLOR_LIGHT_THEME);
   }, [resolvedTheme]);
-
-  useEffect(() => {
-    const imageElement = imageRef.current;
-    if (!imageElement) return;
-
-    const handleScroll = () => {
-      const scrollPosition = window.scrollY;
-      const scrollThreshold = 100;
-
-      if (scrollPosition > scrollThreshold) {
-        imageElement.classList.add("scrolled");
-      } else {
-        imageElement.classList.remove("scrolled");
-      }
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
   useEffect(() => {
     const intervalTime = 2500;
@@ -115,7 +93,10 @@ const HeroSection = () => {
         }
       `}</style>
 
-      <section className="relative w-full pt-10 md:pt-12 pb-10 overflow-hidden overflow-x-hidden">
+      <section 
+        className="relative w-full overflow-x-hidden flex items-start justify-center"
+        style={{ minHeight: '100vh' }}
+      >
         <Particles
           className="absolute inset-0 z-0"
           quantity={200}
@@ -124,124 +105,104 @@ const HeroSection = () => {
           refresh
         />
 
-        <Center className="relative z-10">
-          <Stack gap="xl" align="center" style={{ maxWidth: '800px' }}>
-            <Title
-              order={1}
-              ta="center"
-              style={{
-                fontSize: 'clamp(4rem, 8.5vw, 7.5rem)',
-                lineHeight: TITLE_LINE_HEIGHT_FACTOR,
-                fontWeight: 700,
-                letterSpacing: '-0.025em',
-                WebkitFontSmoothing: 'antialiased',
-                MozOsxFontSmoothing: 'grayscale',
-                display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'center',
-                flexWrap: 'nowrap',
-              }}
-            >
-              <Box
-                component="span"
-                className="margdarshak-slot"
-                style={{ '--margdarshak-color': margdarshakColor }}
-              >
-                <span
-                  key={currentWordIndex}
-                  className="animated-word"
-                  lang={languages[currentWordIndex].lang}
-                >
-                  {languages[currentWordIndex].text}
-                </span>
-              </Box>
-              <span
-                style={{
-                  color: aiColor,
-                  lineHeight: '1', 
-                }}
-              >
-                .ai
-              </span>
-            </Title>
+        <div className="relative z-10 w-full pt-20 pb-10 md:pt-28">
+            <Center>
+                <Stack gap="xl" align="center" style={{ maxWidth: '800px' }} className="px-4">
+                    <Title
+                    order={1}
+                    ta="center"
+                    style={{
+                        fontSize: 'clamp(3rem, 9vw, 6.5rem)',
+                        lineHeight: TITLE_LINE_HEIGHT_FACTOR,
+                        fontWeight: 700,
+                        letterSpacing: '-0.025em',
+                        WebkitFontSmoothing: 'antialiased',
+                        MozOsxFontSmoothing: 'grayscale',
+                    }}
+                    >
+                    <div className="flex items-start justify-center flex-wrap md:flex-nowrap">
+                        <Box
+                        component="span"
+                        className="margdarshak-slot"
+                        style={{ '--margdarshak-color': margdarshakColor }}
+                        >
+                        <span
+                            key={currentWordIndex}
+                            className="animated-word"
+                            lang={languages[currentWordIndex].lang}
+                        >
+                            {languages[currentWordIndex].text}
+                        </span>
+                        </Box>
+                        <span
+                        style={{
+                            color: aiColor,
+                            lineHeight: '1', 
+                        }}
+                        >
+                        .ai
+                        </span>
+                    </div>
+                    </Title>
 
-            <Title
-              order={2}
-              ta="center"
-              style={{
-                fontSize: 'clamp(1.4rem, 2.8vw, 2.2rem)',
-                lineHeight: 1.35,
-                fontWeight: 500,
-                marginTop: 'var(--mantine-spacing-sm)',
-                maxWidth: '700px',
-                WebkitFontSmoothing: 'antialiased',
-                MozOsxFontSmoothing: 'grayscale',
-              }}
-            >
-              Your AI Career Coach for Professional Success
-            </Title>
+                    <Title
+                    order={2}
+                    ta="center"
+                    style={{
+                        fontSize: 'clamp(1.4rem, 2.8vw, 2.2rem)',
+                        lineHeight: 1.35,
+                        fontWeight: 500,
+                        marginTop: 'var(--mantine-spacing-sm)',
+                        maxWidth: '700px',
+                        WebkitFontSmoothing: 'antialiased',
+                        MozOsxFontSmoothing: 'grayscale',
+                    }}
+                    >
+                    Your AI Career Coach for Professional Success
+                    </Title>
 
-            <Text
-              size="lg"
-              c="dimmed"
-              ta="center"
-              maw={600}
-              mt="md"
-              style={{ lineHeight: 1.65 }}
-            >
-              Advance your career with personalized guidance, interview prep, and
-              AI-powered tools for job success.
-            </Text>
+                    <Text
+                    size="lg"
+                    c="dimmed"
+                    ta="center"
+                    maw={600}
+                    mt="md"
+                    style={{ lineHeight: 1.65 }}
+                    >
+                    Advance your career with personalized guidance, interview prep, and
+                    AI-powered tools for job success.
+                    </Text>
 
-            <Group justify="center" gap="md" mt="lg">
-              <Link href="/dashboard" passHref>
-                <InteractiveHoverButton
-                  initialTextColorClass="text-[#1C2D4A]"
-                  hoverTextColorClass="text-[#F4C542]"
-                  fillColor="#1C2D4A"
-                  borderColorClass="border-gray-300"
-                >
-                  Get Started
-                </InteractiveHoverButton>
-              </Link>
+                    <Group justify="center" gap="md" mt="lg">
+                    <Link href="/dashboard" passHref>
+                        <InteractiveHoverButton
+                        initialTextColorClass="text-[#1C2D4A]"
+                        hoverTextColorClass="text-[#F4C542]"
+                        fillColor="#1C2D4A"
+                        borderColorClass="border-gray-300"
+                        >
+                        Get Started
+                        </InteractiveHoverButton>
+                    </Link>
 
-              <Link href="https://www.youtube.com/" passHref> {/* Replace with actual YouTube link */}
-                <InteractiveHoverButton
-                  fillColor={YOUTUBE_RED_FILL}
-                  initialTextColorClass={YOUTUBE_INITIAL_TEXT_COLOR_CLASS}
-                  hoverTextColorClass={YOUTUBE_HOVER_TEXT_COLOR_CLASS}
-                  borderColorClass={YOUTUBE_INITIAL_BORDER_COLOR_CLASS} // Uses the corrected border class
-                  initialBgColorClass="bg-transparent"
-                  icon={(props) => <IconPlayerPlay {...props} fill="white" />} 
-                  hoverIcon={(props) => <IconBrandYoutube {...props} fill="white" />}
-                  showArrow={false}
-                >
-                  Watch Demo
-                </InteractiveHoverButton>
-              </Link>
-            </Group>
-
-            <div className="hero-image-wrapper mt-10 md:mt-12 w-full">
-              <div ref={imageRef} className="hero-image">
-                <Image
-                  src="/banner.jpeg"
-                  width={1280}
-                  height={720}
-                  alt="Dashboard Preview"
-                  style={{
-                    borderRadius: 'var(--mantine-radius-lg)',
-                    boxShadow: 'var(--mantine-shadow-xl)',
-                    border: '1px solid var(--mantine-color-gray-3)',
-                    maxWidth: '100%',
-                    height: 'auto',
-                    margin: '0 auto',
-                  }}
-                  priority
-                />
-              </div>
-            </div>
-          </Stack>
-        </Center>
+                    <Link href="https://www.youtube.com/" passHref>
+                        <InteractiveHoverButton
+                        fillColor={YOUTUBE_RED_FILL}
+                        initialTextColorClass={YOUTUBE_INITIAL_TEXT_COLOR_CLASS}
+                        hoverTextColorClass={YOUTUBE_HOVER_TEXT_COLOR_CLASS}
+                        borderColorClass={YOUTUBE_INITIAL_BORDER_COLOR_CLASS}
+                        initialBgColorClass="bg-transparent"
+                        icon={(props) => <IconPlayerPlay {...props} fill="white" />} 
+                        hoverIcon={(props) => <IconBrandYoutube {...props} fill="white" />}
+                        showArrow={false}
+                        >
+                        Watch Demo
+                        </InteractiveHoverButton>
+                    </Link>
+                    </Group>
+                </Stack>
+            </Center>
+        </div>
       </section>
     </>
   );

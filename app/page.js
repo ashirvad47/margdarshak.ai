@@ -1,4 +1,4 @@
-"use client"; // Mark as client component if any interactivity is planned here or for Mantine components
+"use client";
 
 import React from "react";
 import Link from "next/link";
@@ -6,43 +6,27 @@ import Image from "next/image";
 
 // Mantine Imports
 import { Button, Card, Accordion, Title, Text, SimpleGrid, Center, ThemeIcon, Container, Paper, Group } from '@mantine/core';
-import { IconArrowRight, IconUserPlus, IconFileDescription, IconUsers, IconChartLine } from '@tabler/icons-react'; // Using Tabler for consistency
+import { IconArrowRight, IconUserPlus, IconFileDescription, IconUsers, IconChartLine } from '@tabler/icons-react';
 
-// Data imports (assuming these are simple JS objects/arrays)
-import HeroSection from "@/components/hero"; // Assuming HeroSection will also be updated
+// Data imports
+import HeroSection from "@/components/hero";
+import { TextReveal } from "@/components/magicui/text-reveal";
+import { NumberTicker } from "@/components/magicui/number-ticker"; // Import the new component
 import { features } from "@/data/features";
 import { testimonial } from "@/data/testimonial";
 import { faqs } from "@/data/faqs";
 import { howItWorks } from "@/data/howItWorks";
 
-// Helper to map Shadcn variant to Mantine variant (conceptual)
-const mapButtonVariant = (shadcnVariant) => {
-  switch (shadcnVariant) {
-    case "outline":
-      return "outline";
-    case "secondary":
-      return "light"; // Mantine's 'light' can be similar to a secondary button
-    default:
-      return "filled"; // Mantine's 'filled' is like default
-  }
-};
-
-// Update icon mapping for features and howItWorks data if needed
 const updatedFeatures = features.map(feature => {
-  // Assuming original feature.icon was a Lucide component.
-  // Replace with Tabler icons for consistency or use a mapping.
-  // For now, we'll use a placeholder. You'll need to map these properly.
-  // This part depends on how your `features` data is structured.
-  // For example, if feature.icon was <BrainCircuit />, you'd map BrainCircuit to IconBrain.
-  let IconComponent = IconChartLine; // Placeholder
-  if (feature.title.includes("Guidance")) IconComponent = IconUserPlus; // Rough mapping
+  let IconComponent = IconChartLine;
+  if (feature.title.includes("Guidance")) IconComponent = IconUserPlus;
   if (feature.title.includes("Interview")) IconComponent = IconUsers;
   if (feature.title.includes("Resume")) IconComponent = IconFileDescription;
   return { ...feature, icon: <IconComponent size="2.5rem" stroke={1.5} /> };
 });
 
 const updatedHowItWorks = howItWorks.map(item => {
-  let IconComponent = IconChartLine; // Placeholder
+  let IconComponent = IconChartLine;
   if (item.title.includes("Onboarding")) IconComponent = IconUserPlus;
   if (item.title.includes("Documents")) IconComponent = IconFileDescription;
   if (item.title.includes("Interviews")) IconComponent = IconUsers;
@@ -53,10 +37,25 @@ const updatedHowItWorks = howItWorks.map(item => {
 export default function LandingPage() {
   return (
     <>
-      <div className="grid-background"></div> {/* Keep your background */}
+      <style jsx>{`
+        .banner-and-slogan-section {
+          position: relative;
+          width: 100%;
+          background-image: url('/banner.jpg');
+          background-size: cover;
+          background-position: center center;
+          background-attachment: fixed; /* Creates a parallax-like effect */
+        }
+      `}</style>
+      <div className="grid-background"></div>
 
-      {/* Hero Section - This component also needs to be refactored to use Mantine */}
       <HeroSection />
+
+      <section className="banner-and-slogan-section">
+        <TextReveal>
+          Don't just chase a career. Let the perfect one chase you.
+        </TextReveal>
+      </section>
 
       {/* Features Section */}
       <Container size="lg" py="xl">
@@ -65,7 +64,7 @@ export default function LandingPage() {
         </Title>
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="lg">
           {updatedFeatures.map((feature, index) => (
-            <Paper key={index} p="lg" shadow="sm" withBorder radius="md" style={{ transition: 'border-color 0.3s ease' }} className="hover:border-blue-500"> {/* Mantine Paper as Card */}
+            <Paper key={index} p="lg" shadow="sm" withBorder radius="md" style={{ transition: 'border-color 0.3s ease' }} className="hover:border-blue-500">
               <Center style={{ flexDirection: 'column' }}>
                 <ThemeIcon variant="light" size="xl" radius="md" mb="md" color="gray">
                   {feature.icon}
@@ -80,21 +79,55 @@ export default function LandingPage() {
         </SimpleGrid>
       </Container>
 
-      {/* Stats Section - Using Text and SimpleGrid for layout */}
-      <Paper withBorder={false} py="xl" style={{ backgroundColor: 'var(--mantine-color-gray-0)' }}> {/* Light gray bg */}
+      {/* Stats Section - MODIFIED */}
+      <Paper withBorder={false} py="xl" style={{ backgroundColor: 'var(--mantine-color-gray-0)' }}>
         <Container size="md">
           <SimpleGrid cols={{ base: 2, md: 4 }} spacing="xl">
             {[
-              { label: "Industries Covered", value: "50+" },
-              { label: "Interview Questions", value: "1000+" },
+              { label: "Industries Covered", value: "100+" },
+              { label: "Interview Questions", value: "1M+" },
               { label: "Success Rate", value: "95%" },
               { label: "AI Support", value: "24/7" },
-            ].map((stat, index) => (
-              <Center key={index} style={{ flexDirection: 'column' }}>
-                <Title order={2} >{stat.value}</Title>
-                <Text c="dimmed" size="sm">{stat.label}</Text>
-              </Center>
-            ))}
+            ].map((stat, index) => {
+              let numericValue = null;
+              let suffix = '';
+              let isTickerEligible = false;
+
+              if (stat.value === '24/7') {
+                numericValue = 24;
+                suffix = '/7';
+                isTickerEligible = true;
+              } else {
+                const numberMatch = stat.value.match(/^[\d,.]+/);
+                if (numberMatch) {
+                  let parsedNumber = parseFloat(numberMatch[0].replace(/,/g, ''));
+                  let tempSuffix = stat.value.substring(numberMatch[0].length);
+
+                  if (tempSuffix.toLowerCase().startsWith('m')) {
+                    parsedNumber *= 1000000;
+                    tempSuffix = tempSuffix.substring(1);
+                  }
+                  
+                  numericValue = parsedNumber;
+                  suffix = tempSuffix;
+                  isTickerEligible = true;
+                }
+              }
+
+              return (
+                <Center key={index} style={{ flexDirection: 'column' }}>
+                  {isTickerEligible ? (
+                    <Title order={2} className="flex items-baseline justify-center">
+                      <NumberTicker value={numericValue} />
+                      <span>{suffix}</span>
+                    </Title>
+                  ) : (
+                    <Title order={2}>{stat.value}</Title>
+                  )}
+                  <Text c="dimmed" size="sm">{stat.label}</Text>
+                </Center>
+              );
+            })}
           </SimpleGrid>
         </Container>
       </Paper>
@@ -126,7 +159,7 @@ export default function LandingPage() {
           </Title>
           <SimpleGrid cols={{ base: 1, md: 3 }} spacing="lg">
             {testimonial.map((testimonial, index) => (
-              <Card key={index} shadow="sm" p="lg" radius="md" withBorder> {/* Mantine Card */}
+              <Card key={index} shadow="sm" p="lg" radius="md" withBorder>
                 <Group wrap="nowrap" align="flex-start" mb="md">
                   <Image
                     width={48}
@@ -138,15 +171,14 @@ export default function LandingPage() {
                   <div>
                     <Text fw={500}>{testimonial.author}</Text>
                     <Text size="sm" c="dimmed">{testimonial.role}</Text>
-                    <Text size="sm" c="blue"> {/* Using Mantine's blue for accent */}
+                    <Text size="sm" c="blue">
                       {testimonial.company}
                     </Text>
                   </div>
                 </Group>
                 <Text c="dimmed" fz="sm" lineClamp={5} component="blockquote" pl="xl" style={{ fontStyle: 'italic', position: 'relative' }}>
-                  <Text span size="3xl" style={{ position: 'absolute', left: 0, top: -10, color: 'var(--mantine-color-blue-5)' }}>&ldquo;</Text>
+                  <Text span size="3xl" style={{ position: 'absolute', left: 0, top: -10, color: 'var(--mantine-color-blue-5)' }}>“</Text>
                   {testimonial.quote}
-                  {/* No closing quote needed if text naturally ends */}
                 </Text>
               </Card>
             ))}
@@ -160,7 +192,7 @@ export default function LandingPage() {
         <Text ta="center" c="dimmed" mb="xl" maw={600} mx="auto">
           Find answers to common questions about our platform
         </Text>
-        <Accordion variant="separated" radius="md"> {/* Mantine Accordion */}
+        <Accordion variant="separated" radius="md">
           {faqs.map((faq, index) => (
             <Accordion.Item key={index} value={`faq-${index}`}>
               <Accordion.Control>{faq.question}</Accordion.Control>
@@ -173,9 +205,9 @@ export default function LandingPage() {
       </Container>
 
       {/* CTA Section */}
-      <Paper py={80} className="gradient"> {/* Use your Tailwind gradient class */}
+      <Paper py={80} className="gradient">
         <Container size="sm" ta="center">
-          <Title order={2} mb="md" style={{ color: 'var(--mantine-color-white)'}}> {/* Text color for dark bg */}
+          <Title order={2} mb="md" style={{ color: 'var(--mantine-color-white)'}}>
             Ready to Accelerate Your Career?
           </Title>
           <Text mb="xl" maw={600} mx="auto" style={{ color: 'var(--mantine-color-gray-3)'}}>
@@ -184,9 +216,9 @@ export default function LandingPage() {
           <Link href="/dashboard" passHref>
             <Button
               size="lg"
-              variant="white" // Mantine white variant for dark backgrounds
+              variant="white"
               rightSection={<IconArrowRight size="1rem" stroke={1.5} />}
-              className="h-11 mt-5 animate-bounce" // Tailwind animation, keep if desired
+              className="h-11 mt-5 animate-bounce"
             >
               Start Your Journey Today
             </Button>
