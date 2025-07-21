@@ -4,10 +4,10 @@ import { Container, Title, Text, Stack, SimpleGrid, Card, Image, Group, Paper, C
 import Link from 'next/link';
 
 const teamMembers = [
-  { name: 'Swayam Patnaik', reg: '2141016182', image: '/swayam.jpg', contribution: 'Lead, Backend & AI Integration' },
-  { name: 'Ashirvad Samanta', reg: '2141019189', image: '/ashirvad.jpg', contribution: 'Project Lead, Frontend & UI/UX' },
-  { name: 'Soumyajit Mohanty', reg: '2141013235', image: '/soumya.jpg', contribution: 'Lead, Database & Systems' },
-  { name: 'K. Nikhil', reg: '2141014124', image: '/nikhil.jpg', contribution: 'Lead, Research & ML Models' },
+  { name: 'Swayam Patnaik', reg: '2141016182', image: '/swayam.jpg', contribution: 'AWS Deployment and Reserach' },
+  { name: 'Ashirvad Samanta', reg: '2141019189', image: '/ashirvad.jpg', contribution: 'Project Lead, Full Stack Development, ML Model Training' },
+  { name: 'Soumyajit Mohanty', reg: '2141013235', image: '/soumya.jpg', contribution: 'Support and Maintenance' },
+  { name: 'K. Nikhil', reg: '2141014124', image: '/nikhil.jpg', contribution: 'Support and Maintenance' },
 ];
 
 const TeamMemberCard = ({ member }) => (
